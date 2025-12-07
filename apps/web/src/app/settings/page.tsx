@@ -5,7 +5,6 @@ import { useState, useEffect } from "react";
 import {
     Settings,
     RefreshCw,
-    Code2,
     Save,
     Server,
     Mail,
@@ -22,7 +21,6 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import {
     Select,
@@ -33,7 +31,6 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import {
-    getConfig,
     syncConfig,
     getHealth,
     getGlobalSettings,
@@ -43,7 +40,6 @@ import {
 } from "@/lib/api";
 
 export default function SettingsPage() {
-    const [config, setConfig] = useState<Record<string, unknown> | null>(null);
     const [health, setHealth] = useState<HealthStatus | null>(null);
     const [settings, setSettings] = useState<GlobalSettings | null>(null);
     const [loading, setLoading] = useState(true);
@@ -66,12 +62,10 @@ export default function SettingsPage() {
 
     async function loadData() {
         try {
-            const [configRes, healthRes, settingsRes] = await Promise.all([
-                getConfig(),
+            const [healthRes, settingsRes] = await Promise.all([
                 getHealth(),
                 getGlobalSettings().catch(() => null),
             ]);
-            setConfig(configRes);
             setHealth(healthRes);
             if (settingsRes) {
                 setSettings(settingsRes);
@@ -364,29 +358,6 @@ export default function SettingsPage() {
                                 <code className="text-xs px-2 py-1 rounded bg-background border">:{2019}</code>
                             </div>
                         </div>
-                    </CardContent>
-                </Card>
-            </section>
-
-            {/* Section: Configuration */}
-            <section className="space-y-6">
-                <h2 className="text-xl font-semibold tracking-tight border-b border-border pb-2">Raw Configuration</h2>
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-base">
-                            <Code2 className="w-4 h-4 text-amber-500" />
-                            Caddy JSON
-                        </CardTitle>
-                        <CardDescription>
-                            Current active configuration dump from the Caddy Admin API.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <ScrollArea className="h-[400px] rounded-lg border bg-zinc-950 p-4">
-                            <pre className="text-xs font-mono text-green-400 leading-relaxed">
-                                {config ? JSON.stringify(config, null, 2) : "Loading config..."}
-                            </pre>
-                        </ScrollArea>
                     </CardContent>
                 </Card>
             </section>

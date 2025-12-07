@@ -499,10 +499,6 @@ export interface CaddyMetrics {
 
 export const getCaddyMetrics = () => fetchAPI<CaddyMetrics>('/api/caddy/metrics');
 
-// Caddyfile
-export const validateCaddyfile = (caddyfile: string) =>
-    fetchAPI<{ valid: boolean; error?: string }>('/api/caddyfile/validate', { method: 'POST', body: JSON.stringify({ caddyfile }) });
-
 // Logs
 export interface LogEntry {
     ts: number;

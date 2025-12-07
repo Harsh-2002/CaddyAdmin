@@ -49,7 +49,7 @@ const navigation = [
     { name: "DNS", href: "/dns-providers", icon: Network, color: "text-violet-500" },
     { name: "Metrics", href: "/metrics", icon: Activity, color: "text-indigo-500" },
     { name: "Logs", href: "/logs", icon: ScrollText, color: "text-amber-500" },
-    { name: "Caddyfile", href: "/caddyfile", icon: FileCode, color: "text-slate-500" },
+    { name: "Config", href: "/config", icon: FileCode, color: "text-slate-500" },
     { name: "History", href: "/history", icon: History, color: "text-stone-500" },
     { name: "Settings", href: "/settings", icon: Settings, color: "text-gray-500" },
 ];

@@ -6,8 +6,6 @@ import {
     Download,
     RefreshCw,
     Search,
-    Pause,
-    Play,
     Eraser,
     Filter,
     Copy,
@@ -28,7 +26,6 @@ import {
 import { toast } from "sonner";
 import {
     getLogs,
-    getLogStream,
     type LogEntry,
 } from "@/lib/api";
 
@@ -39,24 +36,21 @@ export default function LogsPage() {
     const [levelFilter, setLevelFilter] = useState("all");
     const [lineCount, setLineCount] = useState("100");
     const [since, setSince] = useState("1h");
-    const [autoRefresh, setAutoRefresh] = useState(false);
+    const [autoRefresh, setAutoRefresh] = useState(true);
     const [autoScroll, setAutoScroll] = useState(true);
-    const [streaming, setStreaming] = useState(false);
 
     const scrollRef = useRef<HTMLDivElement>(null);
-    const eventSourceRef = useRef<EventSource | null>(null);
 
     useEffect(() => {
         loadLogs();
-        return () => stopStreaming();
     }, []);
 
     useEffect(() => {
-        if (autoRefresh && !streaming) {
+        if (autoRefresh) {
             const interval = setInterval(loadLogs, 2000);
             return () => clearInterval(interval);
         }
-    }, [autoRefresh, searchTerm, levelFilter, lineCount, since, streaming]);
+    }, [autoRefresh, searchTerm, levelFilter, lineCount, since]);
 
     useEffect(() => {
         if (autoScroll && scrollRef.current) {
@@ -65,7 +59,6 @@ export default function LogsPage() {
     }, [logs, autoScroll]);
 
     async function loadLogs() {
-        if (streaming) return;
         try {
             const res = await getLogs({
                 lines: parseInt(lineCount),
@@ -81,44 +74,6 @@ export default function LogsPage() {
         }
     }
 
-    function toggleStreaming() {
-        if (streaming) {
-            stopStreaming();
-        } else {
-            startStreaming();
-        }
-    }
-
-    function startStreaming() {
-        setStreaming(true);
-        setAutoRefresh(false);
-        setLogs([]); // Clear for stream
-
-        const es = getLogStream();
-        eventSourceRef.current = es;
-
-        es.onmessage = (event) => {
-            try {
-                const log = JSON.parse(event.data);
-                setLogs((prev) => [...prev, log].slice(-2000));
-            } catch (e) {
-                // Ignore parse errors
-            }
-        };
-
-        es.onerror = () => {
-            stopStreaming();
-            toast.error("Log stream disconnected");
-        };
-    }
-
-    function stopStreaming() {
-        if (eventSourceRef.current) {
-            eventSourceRef.current.close();
-            eventSourceRef.current = null;
-        }
-        setStreaming(false);
-    }
 
     function downloadLogs() {
         const content = logs.map((l) => JSON.stringify(l)).join("\n");
@@ -141,22 +96,7 @@ export default function LogsPage() {
                     <p className="text-muted-foreground mt-1">Real-time server event monitoring</p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button
-                        variant={streaming ? "destructive" : "default"}
-                        onClick={toggleStreaming}
-                        size="sm"
-                    >
-                        {streaming ? (
-                            <>
-                                <Pause className="w-4 h-4 mr-2" /> Stop Stream
-                            </>
-                        ) : (
-                            <>
-                                <Play className="w-4 h-4 mr-2" /> Live Stream
-                            </>
-                        )}
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => loadLogs()} disabled={streaming}>
+                    <Button variant="outline" size="sm" onClick={() => loadLogs()}>
                         <RefreshCw className="w-4 h-4" />
                     </Button>
                     <Button variant="outline" size="sm" onClick={() => setLogs([])}>
@@ -194,7 +134,7 @@ export default function LogsPage() {
                             </SelectContent>
                         </Select>
 
-                        <Select value={since} onValueChange={setSince} disabled={streaming}>
+                        <Select value={since} onValueChange={setSince}>
                             <SelectTrigger className="h-8 w-[110px] bg-background">
                                 <SelectValue placeholder="Time" />
                             </SelectTrigger>
@@ -208,12 +148,10 @@ export default function LogsPage() {
                     </div>
 
                     <div className="flex items-center gap-4 ml-auto text-sm">
-                        {!streaming && (
-                            <div className="flex items-center gap-2">
-                                <Switch id="auto-refresh" checked={autoRefresh} onCheckedChange={setAutoRefresh} />
-                                <Label htmlFor="auto-refresh" className="whitespace-nowrap">Auto-refresh</Label>
-                            </div>
-                        )}
+                        <div className="flex items-center gap-2">
+                            <Switch id="auto-refresh" checked={autoRefresh} onCheckedChange={setAutoRefresh} />
+                            <Label htmlFor="auto-refresh" className="whitespace-nowrap">Auto-refresh</Label>
+                        </div>
                         <div className="flex items-center gap-2">
                             <Switch id="auto-scroll" checked={autoScroll} onCheckedChange={setAutoScroll} />
                             <Label htmlFor="auto-scroll" className="whitespace-nowrap">Auto-scroll</Label>
@@ -235,7 +173,7 @@ export default function LogsPage() {
                         className="flex-1 overflow-auto p-4 pt-2 text-[12px] leading-6 text-gray-300 font-medium"
                         style={{ fontFamily: "Menlo, Monaco, 'Courier New', monospace" }}
                     >
-                        {loading && !streaming ? (
+                        {loading ? (
                             <div className="flex items-center justify-center h-full text-gray-500">
                                 Loading logs...
                             </div>
@@ -245,12 +183,6 @@ export default function LogsPage() {
                             </div>
                         ) : (
                             logs.map((log, i) => <LogLine key={i} log={log} />)
-                        )}
-                        {streaming && (
-                            <div className="py-2 text-blue-400/50 flex items-center gap-2">
-                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-                                Streaming...
-                            </div>
                         )}
                     </div>
                 </div>
