@@ -19,6 +19,8 @@ caddyadmin
 # Node.js
 node_modules/
 .pnpm-store/
+apps/landing/node_modules
+apps/web/node_modules
 
 # Next.js
 apps/web/.next/
@@ -48,6 +50,8 @@ Thumbs.db
 dist/
 build/
 coverage/
+apps/landing/.next
+apps/web/.next
 
 # Test
 *.test
