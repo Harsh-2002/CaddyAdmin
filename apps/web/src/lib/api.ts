@@ -204,6 +204,7 @@ export interface TLSConfig {
     acme_provider: string;
     on_demand_tls: boolean;
     wildcard_cert: boolean;
+    dns_provider_id?: string;
     custom_cert_path: string;
     custom_key_path: string;
     min_version: string;
@@ -522,3 +523,88 @@ export const getLogs = (params?: { lines?: number; search?: string; level?: stri
 
 // Logs Stream
 export const getLogStream = () => new EventSource(`${API_BASE}/api/logs/stream`);
+
+// DNS Providers
+export interface DNSProviderField {
+    name: string;
+    label: string;
+    type: string;
+    required: boolean;
+    placeholder: string;
+}
+
+export interface DNSProviderType {
+    id: string;
+    name: string;
+    module: string;
+    fields: DNSProviderField[];
+}
+
+export interface DNSProvider {
+    id: string;
+    name: string;
+    provider: string;
+    is_default: boolean;
+    enabled: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
+export const getDNSProviderTypes = () =>
+    fetchAPI<{ types: DNSProviderType[] }>('/api/dns-providers/types');
+export const getDNSProviders = () =>
+    fetchAPI<{ providers: DNSProvider[] }>('/api/dns-providers');
+export const getDNSProvider = (id: string) =>
+    fetchAPI<DNSProvider>(`/api/dns-providers/${id}`);
+export const createDNSProvider = (data: { name: string; provider: string; credentials: Record<string, string>; is_default?: boolean }) =>
+    fetchAPI<DNSProvider>('/api/dns-providers', { method: 'POST', body: JSON.stringify(data) });
+export const updateDNSProvider = (id: string, data: Partial<{ name: string; credentials: Record<string, string>; is_default: boolean; enabled: boolean }>) =>
+    fetchAPI<DNSProvider>(`/api/dns-providers/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+export const deleteDNSProvider = (id: string) =>
+    fetchAPI<{ message: string }>(`/api/dns-providers/${id}`, { method: 'DELETE' });
+
+// File Management
+export interface FileInfo {
+    name: string;
+    path: string;
+    type: 'file' | 'directory';
+    size: number;
+    modified: string;
+}
+
+export interface FileListResponse {
+    path: string;
+    site_path: string;
+    files: FileInfo[];
+}
+
+export const getFiles = (siteId: string, path: string = '/') =>
+    fetchAPI<FileListResponse>(`/api/sites/${siteId}/files?path=${encodeURIComponent(path)}`);
+
+export const uploadFiles = async (siteId: string, files: FileList, path: string = '/', extract: boolean = true) => {
+    const formData = new FormData();
+    formData.append('path', path);
+    formData.append('extract', extract.toString());
+    for (let i = 0; i < files.length; i++) {
+        formData.append('files', files[i]);
+    }
+
+    const response = await fetch(`/api/sites/${siteId}/files`, {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+    });
+
+    if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Upload failed');
+    }
+
+    return response.json();
+};
+
+export const deleteFile = (siteId: string, path: string) =>
+    fetchAPI<{ message: string }>(`/api/sites/${siteId}/files?path=${encodeURIComponent(path)}`, { method: 'DELETE' });
+
+export const createDirectory = (siteId: string, path: string) =>
+    fetchAPI<{ message: string }>(`/api/sites/${siteId}/files/mkdir`, { method: 'POST', body: JSON.stringify({ path }) });

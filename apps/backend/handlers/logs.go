@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"caddyadmin/caddy"
+	"caddyadmin/sse"
 
 	"github.com/gin-gonic/gin"
 )
@@ -96,7 +97,7 @@ func (h *LogsHandler) GetLogs(c *gin.Context) {
 	})
 }
 
-// StreamLogs streams logs in real-time using SSE
+// StreamLogs streams logs in real-time using SSE (Legacy direct connection)
 func (h *LogsHandler) StreamLogs(c *gin.Context) {
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
@@ -139,6 +140,81 @@ func (h *LogsHandler) StreamLogs(c *gin.Context) {
 			c.SSEvent("log", entry)
 			c.Writer.Flush()
 		}
+	}
+}
+
+// StartLogBroadcaster background worker to broadcast logs to SSE hub
+func (h *LogsHandler) StartLogBroadcaster(hub *sse.Hub) {
+	go func() {
+		// Retrying loop
+		for {
+			h.broadcastLogs(hub)
+			time.Sleep(2 * time.Second) // Wait before retrying
+		}
+	}()
+}
+
+func (h *LogsHandler) broadcastLogs(hub *sse.Hub) {
+	cmd := exec.Command("journalctl", "-u", "caddy", "-f", "--no-pager", "-o", "cat")
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		// If journalctl fails, try tailing file directly
+		logFile := "/var/log/caddy/access.log"
+		if _, statErr := os.Stat(logFile); statErr == nil {
+			h.broadcastFileTail(hub, logFile)
+		}
+		return
+	}
+
+	if err := cmd.Start(); err != nil {
+		return
+	}
+
+	defer func() {
+		if cmd.Process != nil {
+			cmd.Process.Kill()
+		}
+		cmd.Wait()
+	}()
+
+	reader := bufio.NewReader(stdout)
+
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			return
+		}
+
+		entry := parseLogLine(strings.TrimSpace(line))
+		hub.Broadcast(sse.EventLogs, entry)
+	}
+}
+
+func (h *LogsHandler) broadcastFileTail(hub *sse.Hub, filePath string) {
+	// Simple polling tail implementation for fallback
+	// In production, using fsnotify would be better, but polling is robust
+	file, err := os.Open(filePath)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+
+	// Seek to end
+	file.Seek(0, io.SeekEnd)
+	reader := bufio.NewReader(file)
+
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			if err == io.EOF {
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			return
+		}
+
+		entry := parseLogLine(strings.TrimSpace(line))
+		hub.Broadcast(sse.EventLogs, entry)
 	}
 }
 

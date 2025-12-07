@@ -39,12 +39,13 @@ func Initialize(dbPath string) error {
 		&models.AdminUser{},
 		&models.APIKey{},
 		&models.CustomCertificate{},
+		&models.DNSProvider{},
 	)
 	if err != nil {
 		return err
 	}
 
-	log.Println("✅ Database initialized")
+	log.Println("Database initialized")
 	return nil
 }
 

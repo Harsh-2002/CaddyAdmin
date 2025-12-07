@@ -38,6 +38,7 @@ import {
     deleteHeaderRule,
     type HeaderRule,
 } from "@/lib/api";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 interface SecurityHeadersProps {
     siteId: string;
@@ -47,6 +48,7 @@ export function SecurityHeaders({ siteId }: SecurityHeadersProps) {
     const [rules, setRules] = useState<HeaderRule[]>([]);
     const [loading, setLoading] = useState(true);
     const [dialogOpen, setDialogOpen] = useState(false);
+    const [deleteId, setDeleteId] = useState<string | null>(null);
     const [newRule, setNewRule] = useState({
         direction: "response",
         operation: "set",
@@ -232,7 +234,7 @@ export function SecurityHeaders({ siteId }: SecurityHeadersProps) {
                                             variant="ghost"
                                             size="icon"
                                             className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                            onClick={() => handleDeleteRule(rule.id)}
+                                            onClick={() => setDeleteId(rule.id)}
                                         >
                                             <Trash2 className="w-4 h-4" />
                                         </Button>
@@ -243,6 +245,14 @@ export function SecurityHeaders({ siteId }: SecurityHeadersProps) {
                     </TableBody>
                 </Table>
             </div>
+            <ConfirmDialog
+                open={!!deleteId}
+                onOpenChange={(open) => !open && setDeleteId(null)}
+                title="Delete Header Rule?"
+                description="This action cannot be undone."
+                onConfirm={() => deleteId && handleDeleteRule(deleteId)}
+                variant="destructive"
+            />
         </div>
     );
 }

@@ -82,6 +82,10 @@
         {
             "name": "pki",
             "description": "PKI/Certificate Authority"
+        },
+        {
+            "name": "dns-providers",
+            "description": "DNS provider management for ACME DNS challenges"
         }
     ],
     "paths": {
@@ -1752,6 +1756,344 @@
                     }
                 }
             }
+        },
+        "/dns-providers": {
+            "get": {
+                "tags": [
+                    "dns-providers"
+                ],
+                "summary": "List DNS providers",
+                "description": "Get a list of all configured DNS providers for ACME DNS challenges",
+                "responses": {
+                    "200": {
+                        "description": "List of DNS providers",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "providers": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/DNSProvider"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "dns-providers"
+                ],
+                "summary": "Create DNS provider",
+                "description": "Create a new DNS provider configuration",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateDNSProviderRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "DNS provider created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DNSProvider"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/dns-providers/types": {
+            "get": {
+                "tags": [
+                    "dns-providers"
+                ],
+                "summary": "List supported DNS provider types",
+                "description": "Get a list of all supported DNS provider types and their required fields",
+                "responses": {
+                    "200": {
+                        "description": "List of provider types",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "types": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/DNSProviderType"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/dns-providers/{id}": {
+            "get": {
+                "tags": [
+                    "dns-providers"
+                ],
+                "summary": "Get DNS provider",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DNSProvider"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Provider not found"
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "dns-providers"
+                ],
+                "summary": "Update DNS provider",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateDNSProviderRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DNSProvider"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "dns-providers"
+                ],
+                "summary": "Delete DNS provider",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Provider deleted"
+                    },
+                    "404": {
+                        "description": "Provider not found"
+                    }
+                }
+            }
+        },
+        "/sites/{id}/files": {
+            "get": {
+                "tags": [
+                    "files"
+                ],
+                "summary": "List files",
+                "description": "List files and directories in a site's public folder",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "path",
+                        "in": "query",
+                        "description": "Subdirectory path (default: /)",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/FileListResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid path"
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "files"
+                ],
+                "summary": "Upload files",
+                "description": "Upload files to a site's public folder",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "path": {
+                                        "type": "string"
+                                    },
+                                    "extract": {
+                                        "type": "boolean"
+                                    },
+                                    "files": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string",
+                                            "format": "binary"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Files uploaded successfully"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "files"
+                ],
+                "summary": "Delete file",
+                "description": "Delete a file or directory",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "path",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deleted successfully"
+                    }
+                }
+            }
+        },
+        "/sites/{id}/files/mkdir": {
+            "post": {
+                "tags": [
+                    "files"
+                ],
+                "summary": "Create directory",
+                "description": "Create a new directory",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "path"
+                                ],
+                                "properties": {
+                                    "path": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Directory created"
+                    }
+                }
+            }
         }
     },
     "components": {
@@ -2169,6 +2511,10 @@
                     "wildcard_cert": {
                         "type": "boolean"
                     },
+                    "dns_provider_id": {
+                        "type": "string",
+                        "description": "ID of the DNS provider to use for wildcard certificate DNS challenges"
+                    },
                     "custom_cert_path": {
                         "type": "string"
                     },
@@ -2501,6 +2847,44 @@
                     }
                 }
             },
+            "FileInfo": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "path": {
+                        "type": "string"
+                    },
+                    "type": {
+                        "type": "string"
+                    },
+                    "size": {
+                        "type": "integer"
+                    },
+                    "modified": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            },
+            "FileListResponse": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string"
+                    },
+                    "site_path": {
+                        "type": "string"
+                    },
+                    "files": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/FileInfo"
+                        }
+                    }
+                }
+            },
             "ConfigHistory": {
                 "type": "object",
                 "properties": {
@@ -2599,6 +2983,143 @@
                     },
                     "runtime": {
                         "type": "object"
+                    }
+                }
+            },
+            "DNSProvider": {
+                "type": "object",
+                "description": "DNS provider configuration for ACME DNS challenges",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "User-friendly name for this provider"
+                    },
+                    "provider": {
+                        "type": "string",
+                        "description": "Provider type (cloudflare, route53, etc.)",
+                        "enum": [
+                            "cloudflare",
+                            "route53",
+                            "digitalocean",
+                            "hetzner",
+                            "godaddy",
+                            "namecheap",
+                            "linode",
+                            "vultr",
+                            "netlify",
+                            "duckdns",
+                            "acmedns",
+                            "powerdns",
+                            "ionos",
+                            "alidns",
+                            "tencentcloud",
+                            "huaweicloud"
+                        ]
+                    },
+                    "credentials": {
+                        "type": "string",
+                        "description": "JSON-encoded credentials"
+                    },
+                    "is_default": {
+                        "type": "boolean"
+                    },
+                    "enabled": {
+                        "type": "boolean"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            },
+            "DNSProviderType": {
+                "type": "object",
+                "description": "Supported DNS provider type definition",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "module": {
+                        "type": "string",
+                        "description": "Caddy DNS module path"
+                    },
+                    "fields": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {
+                                    "type": "string"
+                                },
+                                "label": {
+                                    "type": "string"
+                                },
+                                "type": {
+                                    "type": "string",
+                                    "enum": [
+                                        "text",
+                                        "password"
+                                    ]
+                                },
+                                "required": {
+                                    "type": "boolean"
+                                },
+                                "placeholder": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "CreateDNSProviderRequest": {
+                "type": "object",
+                "required": [
+                    "name",
+                    "provider",
+                    "credentials"
+                ],
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "provider": {
+                        "type": "string"
+                    },
+                    "credentials": {
+                        "type": "object",
+                        "additionalProperties": true
+                    },
+                    "is_default": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "UpdateDNSProviderRequest": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "credentials": {
+                        "type": "object",
+                        "additionalProperties": true
+                    },
+                    "is_default": {
+                        "type": "boolean"
+                    },
+                    "enabled": {
+                        "type": "boolean"
                     }
                 }
             }

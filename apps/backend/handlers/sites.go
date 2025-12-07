@@ -5,22 +5,27 @@ import (
 	"caddyadmin/database"
 	"caddyadmin/models"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"github.com/gin-gonic/gin"
 )
 
 // SiteHandler handles site-related endpoints
 type SiteHandler struct {
-	caddyClient  *caddy.Client
 	configBuilder *caddy.ConfigBuilder
+	client        *caddy.Client
+	sitesPath     string
 }
 
 // NewSiteHandler creates a new site handler
-func NewSiteHandler(client *caddy.Client) *SiteHandler {
+func NewSiteHandler(client *caddy.Client, sitesPath string) *SiteHandler {
 	return &SiteHandler{
-		caddyClient:   client,
 		configBuilder: caddy.NewConfigBuilder(client),
+		client:        client,
+		sitesPath:     sitesPath,
 	}
 }
 
@@ -29,8 +34,8 @@ type CreateSiteRequest struct {
 	Name       string   `json:"name" binding:"required"`
 	Hosts      []string `json:"hosts" binding:"required"`
 	ListenPort int      `json:"listen_port"`
-	AutoHTTPS  bool     `json:"auto_https"`
-	TLSEnabled bool     `json:"tls_enabled"`
+	AutoHTTPS  *bool    `json:"auto_https"`
+	TLSEnabled *bool    `json:"tls_enabled"`
 }
 
 // UpdateSiteRequest represents a request to update a site
@@ -110,12 +115,21 @@ func (h *SiteHandler) CreateSite(c *gin.Context) {
 	}
 
 	hostsJSON, _ := json.Marshal(req.Hosts)
+	autoHTTPS := true
+	if req.AutoHTTPS != nil {
+		autoHTTPS = *req.AutoHTTPS
+	}
+	tlsEnabled := true
+	if req.TLSEnabled != nil {
+		tlsEnabled = *req.TLSEnabled
+	}
+
 	site := models.Site{
 		Name:       req.Name,
 		HostsJSON:  string(hostsJSON),
 		ListenPort: req.ListenPort,
-		AutoHTTPS:  req.AutoHTTPS,
-		TLSEnabled: req.TLSEnabled,
+		AutoHTTPS:  autoHTTPS,
+		TLSEnabled: tlsEnabled,
 		Enabled:    true,
 	}
 
@@ -253,6 +267,14 @@ func (h *SiteHandler) DeleteSite(c *gin.Context) {
 		return
 	}
 
+	// Remove site directory
+	sitePath := filepath.Join(h.sitesPath, site.ID)
+	if err := os.RemoveAll(sitePath); err != nil {
+		// Just log error, don't fail the request as the DB record is gone
+		// In a real logger, we would log this.
+		fmt.Printf("Failed to remove site directory %s: %v\n", sitePath, err)
+	}
+
 	// Record history
 	history := models.ConfigHistory{
 		Action:        "delete",
@@ -272,48 +294,8 @@ func (h *SiteHandler) DeleteSite(c *gin.Context) {
 
 // syncToCaddy rebuilds and applies the full configuration to Caddy
 func (h *SiteHandler) syncToCaddy() error {
-	// Get all sites
-	var sites []models.Site
-	database.GetDB().Where("enabled = ?", true).Find(&sites)
-
-	// Get routes for each site
-	routesMap := make(map[string][]models.Route)
-	for _, site := range sites {
-		var routes []models.Route
-		database.GetDB().Where("site_id = ? AND enabled = ?", site.ID, true).Order("`order` ASC").Find(&routes)
-		routesMap[site.ID] = routes
-	}
-
-	// Get redirect rules for each site
-	redirectsMap := make(map[string][]models.RedirectRule)
-	for _, site := range sites {
-		var rules []models.RedirectRule
-		database.GetDB().Where("site_id = ? AND enabled = ?", site.ID, true).Order("priority DESC, created_at DESC").Find(&rules)
-		redirectsMap[site.ID] = rules
-	}
-
-	// Get upstream groups
-	var upstreamGroups []models.UpstreamGroup
-	database.GetDB().Find(&upstreamGroups)
-	groupsMap := make(map[string]*models.UpstreamGroup)
-	upstreamsMap := make(map[string][]models.Upstream)
-	for i := range upstreamGroups {
-		groupsMap[upstreamGroups[i].Name] = &upstreamGroups[i]
-		var upstreams []models.Upstream
-		database.GetDB().Model(&upstreamGroups[i]).Association("Upstreams").Find(&upstreams)
-		upstreamsMap[upstreamGroups[i].Name] = upstreams
-	}
-
-	// Get global settings
-	var settings models.GlobalSettings
-	database.GetDB().First(&settings)
-
-	// Get custom certificates
-	var certificates []models.CustomCertificate
-	database.GetDB().Find(&certificates)
-
-	// Build configuration
-	config, err := h.configBuilder.BuildFullConfig(sites, routesMap, redirectsMap, groupsMap, upstreamsMap, certificates, &settings)
+	// Build configuration from database
+	config, err := h.configBuilder.BuildFromDB()
 	if err != nil {
 		return err
 	}

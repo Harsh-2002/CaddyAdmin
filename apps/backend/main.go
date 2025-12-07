@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 
 	"caddyadmin/auth"
@@ -14,7 +15,7 @@ import (
 	"caddyadmin/database"
 	"caddyadmin/handlers"
 	"caddyadmin/middleware"
-	"caddyadmin/models"
+	"caddyadmin/sse"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
@@ -60,7 +61,7 @@ func main() {
 
 	// Sync database state to Caddy on startup (restore after Caddy restart)
 	if err := syncDatabaseToCaddy(caddyClient); err != nil {
-		log.Printf("⚠️  Config sync failed: %v (manual sync available at POST /api/config/sync)", err)
+		log.Printf("Warning: Config sync failed: %v (manual sync available at POST /api/config/sync)", err)
 	}
 
 	// Create Gin router (release mode for cleaner logs)
@@ -72,7 +73,7 @@ func main() {
 
 	// Create handlers
 	healthHandler := handlers.NewHealthHandler(caddyClient)
-	siteHandler := handlers.NewSiteHandler(caddyClient)
+	siteHandler := handlers.NewSiteHandler(caddyClient, cfg.SitesPath)
 	routeHandler := handlers.NewRouteHandler(caddyClient)
 	upstreamHandler := handlers.NewUpstreamHandler(caddyClient)
 	configHandler := handlers.NewConfigHandler(caddyClient)
@@ -81,6 +82,14 @@ func main() {
 	certificateHandler := handlers.NewCertificateHandler("./storage/certificates")
 	middlewareHandler := handlers.NewMiddlewareHandler()
 	authHandler := handlers.NewAuthHandler()
+	fileHandler := handlers.NewFileHandler(cfg.SitesPath)
+
+	// Create sites directory if it doesn't exist
+	if err := os.MkdirAll(cfg.SitesPath, 0755); err != nil {
+		log.Printf("Warning: Failed to create sites directory: %v", err)
+	} else {
+		log.Printf("Sites directory: %s", cfg.SitesPath)
+	}
 
 	// API routes
 	api := r.Group("/api")
@@ -123,6 +132,7 @@ func main() {
 
 		// Logs endpoints
 		logsHandler := handlers.NewLogsHandler(caddyClient)
+		logsHandler.StartLogBroadcaster(sse.GetHub())
 		api.GET("/logs", logsHandler.GetLogs)
 		api.GET("/logs/stream", logsHandler.StreamLogs)
 		api.GET("/logs/access", logsHandler.GetAccessLogs)
@@ -228,6 +238,21 @@ func main() {
 		api.GET("/certificates/:id", certificateHandler.GetCertificate)
 		api.POST("/certificates", certificateHandler.UploadCertificate)
 		api.DELETE("/certificates/:id", certificateHandler.DeleteCertificate)
+
+		// DNS Provider endpoints
+		dnsProviderHandler := handlers.NewDNSProviderHandler()
+		api.GET("/dns-providers", dnsProviderHandler.ListDNSProviders)
+		api.GET("/dns-providers/types", dnsProviderHandler.GetProviderTypes)
+		api.GET("/dns-providers/:id", dnsProviderHandler.GetDNSProvider)
+		api.POST("/dns-providers", dnsProviderHandler.CreateDNSProvider)
+		api.PUT("/dns-providers/:id", dnsProviderHandler.UpdateDNSProvider)
+		api.DELETE("/dns-providers/:id", dnsProviderHandler.DeleteDNSProvider)
+
+		// File Management endpoints
+		api.GET("/sites/:id/files", fileHandler.ListFiles)
+		api.POST("/sites/:id/files", fileHandler.UploadFiles)
+		api.DELETE("/sites/:id/files", fileHandler.DeleteFile)
+		api.POST("/sites/:id/files/mkdir", fileHandler.CreateDirectory)
 	}
 
 	// Serve Static Frontend (SPA)
@@ -283,50 +308,8 @@ func main() {
 func syncDatabaseToCaddy(client *caddy.Client) error {
 	configBuilder := caddy.NewConfigBuilder(client)
 
-	// Get all sites
-	var sites []models.Site
-	if err := database.GetDB().Where("enabled = ?", true).Find(&sites).Error; err != nil {
-		return fmt.Errorf("failed to load sites: %w", err)
-	}
-
-	// Get routes for each site
-	routesMap := make(map[string][]models.Route)
-	for _, site := range sites {
-		var routes []models.Route
-		database.GetDB().Where("site_id = ? AND enabled = ?", site.ID, true).Order("`order` ASC").Find(&routes)
-		routesMap[site.ID] = routes
-	}
-
-	// Get redirect rules
-	redirectsMap := make(map[string][]models.RedirectRule)
-	for _, site := range sites {
-		var rules []models.RedirectRule
-		database.GetDB().Where("site_id = ? AND enabled = ?", site.ID, true).Order("priority DESC, created_at DESC").Find(&rules)
-		redirectsMap[site.ID] = rules
-	}
-
-	// Get upstream groups
-	var upstreamGroups []models.UpstreamGroup
-	database.GetDB().Find(&upstreamGroups)
-	groupsMap := make(map[string]*models.UpstreamGroup)
-	upstreamsMap := make(map[string][]models.Upstream)
-	for i := range upstreamGroups {
-		groupsMap[upstreamGroups[i].Name] = &upstreamGroups[i]
-		var upstreams []models.Upstream
-		database.GetDB().Model(&upstreamGroups[i]).Association("Upstreams").Find(&upstreams)
-		upstreamsMap[upstreamGroups[i].Name] = upstreams
-	}
-
-	// Get global settings
-	var settings models.GlobalSettings
-	database.GetDB().First(&settings)
-
-	// Get custom certificates
-	var certificates []models.CustomCertificate
-	database.GetDB().Find(&certificates)
-
-	// Build configuration
-	config, err := configBuilder.BuildFullConfig(sites, routesMap, redirectsMap, groupsMap, upstreamsMap, certificates, &settings)
+	// Build configuration from database
+	config, err := configBuilder.BuildFromDB()
 	if err != nil {
 		return fmt.Errorf("failed to build config: %w", err)
 	}
@@ -336,6 +319,6 @@ func syncDatabaseToCaddy(client *caddy.Client) error {
 		return fmt.Errorf("failed to apply config: %w", err)
 	}
 
-	log.Printf("✅ Synced %d sites to Caddy", len(sites))
+	log.Println("Synced configuration to Caddy")
 	return nil
 }

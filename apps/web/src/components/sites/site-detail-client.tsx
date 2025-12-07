@@ -20,6 +20,10 @@ import {
     Package,
     Info,
     Shuffle,
+    Upload,
+    Loader2,
+    Folder,
+    FileIcon,
 } from "lucide-react";
 import { RedirectsList } from "@/components/sites/redirects-list";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,6 +33,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 // Tabs removed
+import { RewritesList } from "@/components/sites/rewrites-list";
 import { Separator } from "@/components/ui/separator";
 import {
     Select,
@@ -73,7 +78,13 @@ import {
     updateMiddlewareSettings,
     type MiddlewareSettings,
     getCertificates,
+    getDNSProviders,
     type CustomCertificate,
+    type DNSProvider,
+    getFiles,
+    uploadFiles,
+    deleteFile,
+    type FileInfo,
 } from "@/lib/api";
 import { SecurityBasicAuth } from "./security/security-basic-auth";
 import { SecurityAccessControl } from "./security/security-access-control";
@@ -88,10 +99,46 @@ export default function SiteDetailClient() {
     const [upstreams, setUpstreams] = useState<Upstream[]>([]);
     const [tlsConfig, setTlsConfig] = useState<TLSConfig | null>(null);
     const [middlewareSettings, setMiddlewareSettings] = useState<MiddlewareSettings | null>(null);
+    const [dnsProviders, setDnsProviders] = useState<DNSProvider[]>([]);
+    const [files, setFiles] = useState<FileInfo[]>([]);
+    const [currentPath, setCurrentPath] = useState('/');
+    const [sitePath, setSitePath] = useState('');
+    const [uploading, setUploading] = useState(false);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [savingTls, setSavingTls] = useState(false);
     const [dialogOpen, setDialogOpen] = useState(false);
+
+    // Helper functions
+    const formatBytes = (bytes: number): string => {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    };
+
+    const loadFiles = async (path: string) => {
+        try {
+            const data = await getFiles(id, path);
+            setFiles(data.files);
+            setSitePath(data.site_path);
+        } catch (err) {
+            console.error('Failed to load files:', err);
+        }
+    };
+
+    const handleUpload = async (fileList: FileList) => {
+        setUploading(true);
+        try {
+            await uploadFiles(id, fileList, currentPath, true);
+            await loadFiles(currentPath);
+        } catch (err) {
+            console.error('Upload failed:', err);
+        } finally {
+            setUploading(false);
+        }
+    };
 
     const [formData, setFormData] = useState({
         name: "",
@@ -107,6 +154,7 @@ export default function SiteDetailClient() {
         acme_provider: "letsencrypt",
         on_demand_tls: false,
         wildcard_cert: false,
+        dns_provider_id: "",
         custom_cert_path: "",
         custom_key_path: "",
         min_version: "tls1.2",
@@ -152,13 +200,15 @@ export default function SiteDetailClient() {
 
     async function loadData() {
         try {
-            const [siteData, routesData, tlsData, upstreamsData, middlewareData, certsData] = await Promise.all([
+            const [siteData, routesData, tlsData, upstreamsData, middlewareData, certsData, dnsData, filesData] = await Promise.all([
                 getSite(id),
                 getRoutes(id),
                 getTLSConfig(id),
                 getUpstreams(),
                 getMiddlewareSettings(id),
                 getCertificates(),
+                getDNSProviders(),
+                getFiles(id, "/").catch(() => ({ files: [], site_path: "" })),
             ]);
 
             setSite(siteData);
@@ -167,6 +217,9 @@ export default function SiteDetailClient() {
             setUpstreams(upstreamsData.upstreams || []);
             setMiddlewareSettings(middlewareData);
             setCustomCerts(certsData.certificates || []);
+            setDnsProviders(dnsData.providers || []);
+            setFiles(filesData.files || []);
+            setSitePath(filesData.site_path || "");
 
             setFormData({
                 name: siteData.name,
@@ -178,11 +231,12 @@ export default function SiteDetailClient() {
 
             if (tlsData) {
                 setTlsForm({
-                    auto_https: tlsData.auto_https ?? true,
+                    auto_https: tlsData.auto_https ?? siteData.auto_https,
                     acme_email: tlsData.acme_email || "",
                     acme_provider: tlsData.acme_provider || "letsencrypt",
                     on_demand_tls: tlsData.on_demand_tls ?? false,
                     wildcard_cert: tlsData.wildcard_cert ?? false,
+                    dns_provider_id: tlsData.dns_provider_id || "",
                     custom_cert_path: tlsData.custom_cert_path || "",
                     custom_key_path: tlsData.custom_key_path || "",
                     min_version: tlsData.min_version || "tls1.2",
@@ -203,6 +257,12 @@ export default function SiteDetailClient() {
                         setSelectedCertId(matchedCert.id);
                     }
                 }
+            } else {
+                // No TLSConfig record yet, use site's settings as defaults
+                setTlsForm(prev => ({
+                    ...prev,
+                    auto_https: siteData.auto_https,
+                }));
             }
         } catch (error) {
             toast.error("Failed to load site");
@@ -340,11 +400,6 @@ export default function SiteDetailClient() {
         <div className="space-y-6">
             {/* Header */}
             <div className="flex items-center gap-4">
-                <Link href="/sites">
-                    <Button variant="ghost" size="icon">
-                        <ArrowLeft className="w-4 h-4" />
-                    </Button>
-                </Link>
                 <div className="flex-1">
                     <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
                         <Globe className="w-8 h-8 text-primary" />
@@ -363,617 +418,813 @@ export default function SiteDetailClient() {
                 )}
             </div>
 
-            {/* Stacked Content */}
-            <div className="space-y-10 pb-20">
+            {/* Sections */}
+            <div className="space-y-10">
 
                 {/* Settings Section */}
-                <section className="space-y-4">
-                    <h2 className="text-xl font-semibold tracking-tight border-b border-border pb-2">General Configuration</h2>
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Site Configuration</CardTitle>
-                            <CardDescription>Basic site settings and domain configuration</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="grid gap-2">
-                                <Label htmlFor="name">Site Name</Label>
-                                <Input
-                                    id="name"
-                                    value={formData.name}
-                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="hosts">Hosts (comma-separated)</Label>
-                                <Input
-                                    id="hosts"
-                                    placeholder="example.com, www.example.com"
-                                    value={formData.hosts}
-                                    onChange={(e) => setFormData({ ...formData, hosts: e.target.value })}
-                                />
-                                <p className="text-xs text-muted-foreground">
-                                    Enter domain names that this site should respond to
-                                </p>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <section id="settings" className="space-y-4 scroll-mt-20">
+                    <section className="space-y-4">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Site Configuration</CardTitle>
+                                <CardDescription>Basic site settings and domain configuration</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
                                 <div className="grid gap-2">
-                                    <Label htmlFor="port">Listen Port</Label>
+                                    <Label htmlFor="name">Site Name</Label>
                                     <Input
-                                        id="port"
-                                        type="number"
-                                        value={formData.listen_port}
-                                        onChange={(e) => setFormData({ ...formData, listen_port: parseInt(e.target.value) || 443 })}
+                                        id="name"
+                                        value={formData.name}
+                                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                                     />
                                 </div>
-                                <div className="flex items-center justify-between p-4 rounded-lg bg-muted">
-                                    <div>
-                                        <Label>Site Enabled</Label>
-                                        <p className="text-sm text-muted-foreground">Serve traffic for this site</p>
-                                    </div>
-                                    <Switch
-                                        checked={formData.enabled}
-                                        onCheckedChange={(checked) => setFormData({ ...formData, enabled: checked })}
+                                <div className="grid gap-2">
+                                    <Label htmlFor="hosts">Hosts (comma-separated)</Label>
+                                    <Input
+                                        id="hosts"
+                                        placeholder="example.com, www.example.com"
+                                        value={formData.hosts}
+                                        onChange={(e) => setFormData({ ...formData, hosts: e.target.value })}
                                     />
-                                </div>
-                            </div>
-                            <Button onClick={handleSave} disabled={saving}>
-                                <Save className="w-4 h-4 mr-2" />
-                                {saving ? "Saving..." : "Save Changes"}
-                            </Button>
-                        </CardContent>
-                    </Card>
-                </section>
-
-                {/* SSL/TLS Section */}
-                <section className="space-y-4">
-                    <h2 className="text-xl font-semibold tracking-tight border-b border-border pb-2">SSL/TLS Configuration</h2>
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <Shield className="w-5 h-5 text-green-500" />
-                                SSL/TLS Configuration
-                            </CardTitle>
-                            <CardDescription>
-                                Configure HTTPS certificates and TLS settings
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
-                            {/* Auto HTTPS */}
-                            <div className="flex items-center justify-between p-4 rounded-lg border bg-gradient-to-r from-green-500/5 to-green-600/5 border-green-500/20">
-                                <div>
-                                    <Label className="text-base">Automatic HTTPS</Label>
-                                    <p className="text-sm text-muted-foreground">
-                                        Let Caddy automatically obtain and renew TLS certificates via ACME
+                                    <p className="text-xs text-muted-foreground">
+                                        Enter domain names that this site should respond to
                                     </p>
                                 </div>
-                                <Switch
-                                    checked={tlsForm.auto_https}
-                                    onCheckedChange={(checked) => setTlsForm({ ...tlsForm, auto_https: checked })}
-                                />
-                            </div>
-
-                            {tlsForm.auto_https && (
-                                <>
-                                    <Separator />
-                                    <div className="space-y-4">
-                                        <h4 className="font-medium">ACME Settings</h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div className="grid gap-2">
-                                                <Label htmlFor="acmeProvider">Certificate Provider</Label>
-                                                <Select
-                                                    value={tlsForm.acme_provider}
-                                                    onValueChange={(value) => setTlsForm({ ...tlsForm, acme_provider: value })}
-                                                >
-                                                    <SelectTrigger>
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="letsencrypt">Let's Encrypt</SelectItem>
-                                                        <SelectItem value="zerossl">ZeroSSL</SelectItem>
-                                                        <SelectItem value="buypass">Buypass</SelectItem>
-                                                        <SelectItem value="internal">Internal CA</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                            <div className="grid gap-2">
-                                                <Label htmlFor="acmeEmail">ACME Email</Label>
-                                                <Input
-                                                    id="acmeEmail"
-                                                    type="email"
-                                                    placeholder="admin@example.com"
-                                                    value={tlsForm.acme_email}
-                                                    onChange={(e) => setTlsForm({ ...tlsForm, acme_email: e.target.value })}
-                                                />
-                                            </div>
-                                        </div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div className="flex items-center justify-between p-3 rounded-lg bg-muted">
-                                                <div>
-                                                    <Label>On-Demand TLS</Label>
-                                                    <p className="text-xs text-muted-foreground">Obtain certs on first request</p>
-                                                </div>
-                                                <Switch
-                                                    checked={tlsForm.on_demand_tls}
-                                                    onCheckedChange={(checked) => setTlsForm({ ...tlsForm, on_demand_tls: checked })}
-                                                />
-                                            </div>
-                                            <div className="flex items-center justify-between p-3 rounded-lg bg-muted">
-                                                <div>
-                                                    <Label>Wildcard Certificate</Label>
-                                                    <p className="text-xs text-muted-foreground">Request *.domain.com cert</p>
-                                                </div>
-                                                <Switch
-                                                    checked={tlsForm.wildcard_cert}
-                                                    onCheckedChange={(checked) => setTlsForm({ ...tlsForm, wildcard_cert: checked })}
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                </>
-                            )}
-
-                            {!tlsForm.auto_https && (
-                                <>
-                                    <Separator />
-                                    <div className="space-y-4">
-                                        <div className="flex items-center justify-between">
-                                            <h4 className="font-medium">Custom Certificate</h4>
-                                            <div className="flex bg-muted rounded-lg p-1">
-                                                <Button
-                                                    variant={certMode === "managed" ? "default" : "ghost"}
-                                                    size="sm"
-                                                    onClick={() => setCertMode("managed")}
-                                                    className="h-7"
-                                                >
-                                                    Managed
-                                                </Button>
-                                                <Button
-                                                    variant={certMode === "manual" ? "default" : "ghost"}
-                                                    size="sm"
-                                                    onClick={() => setCertMode("manual")}
-                                                    className="h-7"
-                                                >
-                                                    Manual Path
-                                                </Button>
-                                            </div>
-                                        </div>
-
-                                        {certMode === "managed" ? (
-                                            <div className="space-y-4">
-                                                <div className="space-y-2">
-                                                    <Label htmlFor="certSelect">Select Certificate</Label>
-                                                    <Select
-                                                        value={selectedCertId}
-                                                        onValueChange={setSelectedCertId}
-                                                    >
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder="Select a certificate..." />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {customCerts.map((cert) => (
-                                                                <SelectItem key={cert.id} value={cert.id}>
-                                                                    {cert.name} ({cert.domains?.join(", ")})
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                    <p className="text-xs text-muted-foreground">
-                                                        Manage certificates in the SSL/TLS tab main menu.
-                                                    </p>
-                                                </div>
-                                                {selectedCertId && (
-                                                    <div className="grid gap-2 p-3 bg-muted/50 rounded-md border text-sm text-muted-foreground">
-                                                        <div className="flex gap-2">
-                                                            <span className="font-medium">Cert:</span>
-                                                            <span className="break-all">{tlsForm.custom_cert_path}</span>
-                                                        </div>
-                                                        <div className="flex gap-2">
-                                                            <span className="font-medium">Key:</span>
-                                                            <span className="break-all">{tlsForm.custom_key_path}</span>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ) : (
-                                            <div className="grid gap-4 animate-in fade-in zoom-in-95 duration-200">
-                                                <div className="grid gap-2">
-                                                    <Label htmlFor="certPath">Certificate Path</Label>
-                                                    <Input
-                                                        id="certPath"
-                                                        placeholder="/etc/ssl/certs/domain.crt"
-                                                        value={tlsForm.custom_cert_path}
-                                                        onChange={(e) => setTlsForm({ ...tlsForm, custom_cert_path: e.target.value })}
-                                                    />
-                                                </div>
-                                                <div className="grid gap-2">
-                                                    <Label htmlFor="keyPath">Private Key Path</Label>
-                                                    <Input
-                                                        id="keyPath"
-                                                        placeholder="/etc/ssl/private/domain.key"
-                                                        value={tlsForm.custom_key_path}
-                                                        onChange={(e) => setTlsForm({ ...tlsForm, custom_key_path: e.target.value })}
-                                                    />
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                </>
-                            )}
-
-                            <Separator />
-                            <div className="space-y-4">
-                                <h4 className="font-medium">TLS Protocol Settings</h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="grid gap-2">
-                                        <Label htmlFor="minVersion">Minimum TLS Version</Label>
-                                        <Select
-                                            value={tlsForm.min_version}
-                                            onValueChange={(value) => setTlsForm({ ...tlsForm, min_version: value })}
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="tls1.0">TLS 1.0 (Not Recommended)</SelectItem>
-                                                <SelectItem value="tls1.1">TLS 1.1 (Legacy)</SelectItem>
-                                                <SelectItem value="tls1.2">TLS 1.2 (Recommended)</SelectItem>
-                                                <SelectItem value="tls1.3">TLS 1.3 (Modern)</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="cipherSuites">Cipher Suites (optional)</Label>
+                                        <Label htmlFor="port">Listen Port</Label>
                                         <Input
-                                            id="cipherSuites"
-                                            placeholder="Leave empty for defaults"
-                                            value={tlsForm.cipher_suites}
-                                            onChange={(e) => setTlsForm({ ...tlsForm, cipher_suites: e.target.value })}
+                                            id="port"
+                                            type="number"
+                                            value={formData.listen_port}
+                                            onChange={(e) => setFormData({ ...formData, listen_port: parseInt(e.target.value) || 443 })}
+                                        />
+                                    </div>
+                                    <div className="flex items-center justify-between p-4 rounded-lg bg-muted">
+                                        <div>
+                                            <Label>Site Enabled</Label>
+                                            <p className="text-sm text-muted-foreground">Serve traffic for this site</p>
+                                        </div>
+                                        <Switch
+                                            checked={formData.enabled}
+                                            onCheckedChange={(checked) => setFormData({ ...formData, enabled: checked })}
                                         />
                                     </div>
                                 </div>
-                            </div>
-
-                            <Button onClick={handleSaveTls} disabled={savingTls}>
-                                <Save className="w-4 h-4 mr-2" />
-                                {savingTls ? "Saving..." : "Save TLS Settings"}
-                            </Button>
-                        </CardContent>
-                    </Card>
+                                <Button onClick={handleSave} disabled={saving}>
+                                    <Save className="w-4 h-4 mr-2" />
+                                    {saving ? "Saving..." : "Save Changes"}
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    </section>
                 </section>
 
-                {/* Security Section */}
-                <section className="space-y-4">
-                    <h2 className="text-xl font-semibold tracking-tight border-b border-border pb-2">Security Controls</h2>
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <Lock className="w-5 h-5 text-orange-500" />
-                                Security Settings
-                            </CardTitle>
-                            <CardDescription>
-                                Configure authentication, access control, headers, and more
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-8">
-                            {/* Basic Authentication */}
-                            <section>
-                                <h4 className="font-medium flex items-center gap-2 mb-4 text-lg">
-                                    <KeyRound className="w-5 h-5" /> Basic Authentication
-                                </h4>
-                                {middlewareSettings && (
-                                    <SecurityBasicAuth
-                                        siteId={id}
-                                        middleware={middlewareSettings}
-                                        onUpdateMiddleware={handleUpdateMiddleware}
+                {/* SSL Section */}
+                <section id="ssl" className="space-y-4 scroll-mt-20">
+                    <section className="space-y-4">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Shield className="w-5 h-5 text-green-500" />
+                                    SSL/TLS Configuration
+                                </CardTitle>
+                                <CardDescription>
+                                    Configure HTTPS certificates and TLS settings
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-6">
+                                {/* Auto HTTPS */}
+                                <div className="flex items-center justify-between p-4 rounded-lg border bg-gradient-to-r from-green-500/5 to-green-600/5 border-green-500/20">
+                                    <div>
+                                        <Label className="text-base">Automatic HTTPS</Label>
+                                        <p className="text-sm text-muted-foreground">
+                                            Let Caddy automatically obtain and renew TLS certificates via ACME
+                                        </p>
+                                    </div>
+                                    <Switch
+                                        checked={tlsForm.auto_https}
+                                        onCheckedChange={(checked) => setTlsForm({ ...tlsForm, auto_https: checked })}
                                     />
-                                )}
-                            </section>
+                                </div>
 
-                            <Separator />
-
-                            {/* IP Access Control */}
-                            <section>
-                                <h4 className="font-medium flex items-center gap-2 mb-4 text-lg">
-                                    <Shield className="w-5 h-5" /> IP Access Control
-                                </h4>
-                                {middlewareSettings && (
-                                    <SecurityAccessControl
-                                        siteId={id}
-                                        middleware={middlewareSettings}
-                                        onUpdateMiddleware={handleUpdateMiddleware}
-                                    />
-                                )}
-                            </section>
-
-                            <Separator />
-
-                            {/* Custom Headers */}
-                            <section>
-                                <h4 className="font-medium flex items-center gap-2 mb-4 text-lg">
-                                    <FileText className="w-5 h-5" /> Custom Headers
-                                </h4>
-                                <SecurityHeaders siteId={id} />
-                            </section>
-
-                            <Separator />
-
-                            {/* Compression */}
-                            <section>
-                                <h4 className="font-medium flex items-center gap-2 mb-4 text-lg">
-                                    <Package className="w-5 h-5" /> Compression
-                                </h4>
-                                {middlewareSettings && (
-                                    <SecurityMiddleware
-                                        middleware={middlewareSettings}
-                                        onUpdateMiddleware={handleUpdateMiddleware}
-                                    />
-                                )}
-                            </section>
-                        </CardContent>
-                    </Card>
-                </section>
-
-                {/* Redirects Section */}
-                <section className="space-y-4">
-                    <h2 className="text-xl font-semibold tracking-tight border-b border-border pb-2">Redirect Rules</h2>
-                    <Card>
-                        <CardContent className="pt-6">
-                            <RedirectsList siteId={id} />
-                        </CardContent>
-                    </Card>
-                </section>
-
-                {/* Routes Section */}
-                <section className="space-y-4">
-                    <h2 className="text-xl font-semibold tracking-tight border-b border-border pb-2">Traffic Routing</h2>
-                    <Card>
-                        <CardHeader className="flex flex-row items-center justify-between">
-                            <div>
-                                <CardTitle>Routes</CardTitle>
-                                <CardDescription>Configure request routing and handlers</CardDescription>
-                            </div>
-                            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                                <DialogTrigger asChild>
-                                    <Button>
-                                        <Plus className="w-4 h-4 mr-2" />
-                                        Add Route
-                                    </Button>
-                                </DialogTrigger>
-                                <DialogContent className="sm:max-w-[600px]">
-                                    <DialogHeader>
-                                        <DialogTitle>Create Route</DialogTitle>
-                                        <DialogDescription>Configure a new route handler</DialogDescription>
-                                    </DialogHeader>
-                                    <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto">
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="grid gap-2">
-                                                <Label htmlFor="routeName">Route Name</Label>
-                                                <Input
-                                                    id="routeName"
-                                                    placeholder="e.g., api-proxy"
-                                                    value={routeForm.name}
-                                                    onChange={(e) => setRouteForm({ ...routeForm, name: e.target.value })}
-                                                />
+                                {tlsForm.auto_https && (
+                                    <>
+                                        <Separator />
+                                        <div className="space-y-4">
+                                            <h4 className="font-medium">ACME Settings</h4>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div className="grid gap-2">
+                                                    <Label htmlFor="acmeProvider">Certificate Provider</Label>
+                                                    <Select
+                                                        value={tlsForm.acme_provider}
+                                                        onValueChange={(value) => setTlsForm({ ...tlsForm, acme_provider: value })}
+                                                    >
+                                                        <SelectTrigger>
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="letsencrypt">Let's Encrypt</SelectItem>
+                                                            <SelectItem value="zerossl">ZeroSSL</SelectItem>
+                                                            <SelectItem value="buypass">Buypass</SelectItem>
+                                                            <SelectItem value="internal">Internal CA</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <div className="grid gap-2">
+                                                    <Label htmlFor="acmeEmail">ACME Email</Label>
+                                                    <Input
+                                                        id="acmeEmail"
+                                                        type="email"
+                                                        placeholder="admin@example.com"
+                                                        value={tlsForm.acme_email}
+                                                        onChange={(e) => setTlsForm({ ...tlsForm, acme_email: e.target.value })}
+                                                    />
+                                                </div>
                                             </div>
-                                            <div className="grid gap-2">
-                                                <Label htmlFor="order">Priority Order</Label>
-                                                <Input
-                                                    id="order"
-                                                    type="number"
-                                                    value={routeForm.order}
-                                                    onChange={(e) => setRouteForm({ ...routeForm, order: parseInt(e.target.value) || 0 })}
-                                                />
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div className="flex items-center justify-between p-3 rounded-lg bg-muted">
+                                                    <div>
+                                                        <Label>On-Demand TLS</Label>
+                                                        <p className="text-xs text-muted-foreground">Obtain certs on first request</p>
+                                                    </div>
+                                                    <Switch
+                                                        checked={tlsForm.on_demand_tls}
+                                                        onCheckedChange={(checked) => setTlsForm({ ...tlsForm, on_demand_tls: checked })}
+                                                    />
+                                                </div>
+                                                <div className="flex items-center justify-between p-3 rounded-lg bg-muted">
+                                                    <div>
+                                                        <Label>Wildcard Certificate</Label>
+                                                        <p className="text-xs text-muted-foreground">Request *.domain.com cert</p>
+                                                    </div>
+                                                    <Switch
+                                                        checked={tlsForm.wildcard_cert}
+                                                        onCheckedChange={(checked) => setTlsForm({ ...tlsForm, wildcard_cert: checked })}
+                                                    />
+                                                </div>
+                                                {tlsForm.wildcard_cert && (
+                                                    <div className="space-y-2 pt-2 border-t mt-2">
+                                                        <Label>DNS Provider (Required for Wildcard)</Label>
+                                                        <Select
+                                                            value={tlsForm.dns_provider_id}
+                                                            onValueChange={(val) => setTlsForm({ ...tlsForm, dns_provider_id: val })}
+                                                        >
+                                                            <SelectTrigger>
+                                                                <SelectValue placeholder="Select DNS Provider" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {dnsProviders.map((p) => (
+                                                                    <SelectItem key={p.id} value={p.id}>
+                                                                        {p.name} ({p.provider})
+                                                                    </SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            Configure providers in the main menu.
+                                                        </p>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
-                                        <div className="grid gap-2">
-                                            <Label htmlFor="pathMatcher">Path Matcher</Label>
-                                            <Input
-                                                id="pathMatcher"
-                                                placeholder="e.g., /api/*, /static/*, /"
-                                                value={routeForm.path_matcher}
-                                                onChange={(e) => setRouteForm({ ...routeForm, path_matcher: e.target.value })}
-                                            />
+                                    </>
+                                )}
+
+                                {!tlsForm.auto_https && (
+                                    <>
+                                        <Separator />
+                                        <div className="space-y-4">
+                                            <div className="flex items-center justify-between">
+                                                <h4 className="font-medium">Custom Certificate</h4>
+                                                <div className="flex bg-muted rounded-lg p-1">
+                                                    <Button
+                                                        variant={certMode === "managed" ? "default" : "ghost"}
+                                                        size="sm"
+                                                        onClick={() => setCertMode("managed")}
+                                                        className="h-7"
+                                                    >
+                                                        Managed
+                                                    </Button>
+                                                    <Button
+                                                        variant={certMode === "manual" ? "default" : "ghost"}
+                                                        size="sm"
+                                                        onClick={() => setCertMode("manual")}
+                                                        className="h-7"
+                                                    >
+                                                        Manual Path
+                                                    </Button>
+                                                </div>
+                                            </div>
+
+                                            {certMode === "managed" ? (
+                                                <div className="space-y-4">
+                                                    <div className="space-y-2">
+                                                        <Label htmlFor="certSelect">Select Certificate</Label>
+                                                        <Select
+                                                            value={selectedCertId}
+                                                            onValueChange={setSelectedCertId}
+                                                        >
+                                                            <SelectTrigger>
+                                                                <SelectValue placeholder="Select a certificate..." />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {customCerts.map((cert) => (
+                                                                    <SelectItem key={cert.id} value={cert.id}>
+                                                                        {cert.name} ({cert.domains?.join(", ")})
+                                                                    </SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            Manage certificates in the SSL/TLS tab main menu.
+                                                        </p>
+                                                    </div>
+                                                    {selectedCertId && (
+                                                        <div className="grid gap-2 p-3 bg-muted/50 rounded-md border text-sm text-muted-foreground">
+                                                            <div className="flex gap-2">
+                                                                <span className="font-medium">Cert:</span>
+                                                                <span className="break-all">{tlsForm.custom_cert_path}</span>
+                                                            </div>
+                                                            <div className="flex gap-2">
+                                                                <span className="font-medium">Key:</span>
+                                                                <span className="break-all">{tlsForm.custom_key_path}</span>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <div className="grid gap-4 animate-in fade-in zoom-in-95 duration-200">
+                                                    <div className="grid gap-2">
+                                                        <Label htmlFor="certPath">Certificate Path</Label>
+                                                        <Input
+                                                            id="certPath"
+                                                            placeholder="/etc/ssl/certs/domain.crt"
+                                                            value={tlsForm.custom_cert_path}
+                                                            onChange={(e) => setTlsForm({ ...tlsForm, custom_cert_path: e.target.value })}
+                                                        />
+                                                    </div>
+                                                    <div className="grid gap-2">
+                                                        <Label htmlFor="keyPath">Private Key Path</Label>
+                                                        <Input
+                                                            id="keyPath"
+                                                            placeholder="/etc/ssl/private/domain.key"
+                                                            value={tlsForm.custom_key_path}
+                                                            onChange={(e) => setTlsForm({ ...tlsForm, custom_key_path: e.target.value })}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
+                                    </>
+                                )}
+
+                                <Separator />
+                                <div className="space-y-4">
+                                    <h4 className="font-medium">TLS Protocol Settings</h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div className="grid gap-2">
-                                            <Label htmlFor="handlerType">Handler Type</Label>
+                                            <Label htmlFor="minVersion">Minimum TLS Version</Label>
                                             <Select
-                                                value={routeForm.handler_type}
-                                                onValueChange={(value) => setRouteForm({ ...routeForm, handler_type: value })}
+                                                value={tlsForm.min_version}
+                                                onValueChange={(value) => setTlsForm({ ...tlsForm, min_version: value })}
                                             >
                                                 <SelectTrigger>
                                                     <SelectValue />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    <SelectItem value="reverse_proxy">
-                                                        <div className="flex items-center gap-2">
-                                                            <Server className="w-4 h-4" />
-                                                            Reverse Proxy
-                                                        </div>
-                                                    </SelectItem>
-                                                    <SelectItem value="file_server">File Server</SelectItem>
-                                                    <SelectItem value="static_response">Static Response</SelectItem>
-                                                    <SelectItem value="redirect">Redirect</SelectItem>
+                                                    <SelectItem value="tls1.0">TLS 1.0 (Not Recommended)</SelectItem>
+                                                    <SelectItem value="tls1.1">TLS 1.1 (Legacy)</SelectItem>
+                                                    <SelectItem value="tls1.2">TLS 1.2 (Recommended)</SelectItem>
+                                                    <SelectItem value="tls1.3">TLS 1.3 (Modern)</SelectItem>
                                                 </SelectContent>
                                             </Select>
                                         </div>
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="cipherSuites">Cipher Suites (optional)</Label>
+                                            <Input
+                                                id="cipherSuites"
+                                                placeholder="Leave empty for defaults"
+                                                value={tlsForm.cipher_suites}
+                                                onChange={(e) => setTlsForm({ ...tlsForm, cipher_suites: e.target.value })}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
 
-                                        <Separator />
+                                <Button onClick={handleSaveTls} disabled={savingTls}>
+                                    <Save className="w-4 h-4 mr-2" />
+                                    {savingTls ? "Saving..." : "Save TLS Settings"}
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    </section>
+                </section>
 
-                                        {/* Handler-specific fields */}
-                                        {routeForm.handler_type === "reverse_proxy" && (
-                                            <div className="space-y-4 p-4 rounded-lg bg-muted/50">
-                                                <h4 className="font-medium flex items-center gap-2">
-                                                    <Server className="w-4 h-4" />
-                                                    Reverse Proxy Settings
-                                                </h4>
+                {/* Security Section */}
+                <section id="security" className="space-y-4 scroll-mt-20">
+                    <section className="space-y-4">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Lock className="w-5 h-5 text-orange-500" />
+                                    Security Settings
+                                </CardTitle>
+                                <CardDescription>
+                                    Configure authentication, access control, headers, and more
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-8">
+                                {/* Basic Authentication */}
+                                <section>
+                                    <h4 className="font-medium flex items-center gap-2 mb-4 text-lg">
+                                        <KeyRound className="w-5 h-5" /> Basic Authentication
+                                    </h4>
+                                    {middlewareSettings && (
+                                        <SecurityBasicAuth
+                                            siteId={id}
+                                            middleware={middlewareSettings}
+                                            onUpdateMiddleware={handleUpdateMiddleware}
+                                        />
+                                    )}
+                                </section>
+
+                                <Separator />
+
+                                {/* IP Access Control */}
+                                <section>
+                                    <h4 className="font-medium flex items-center gap-2 mb-4 text-lg">
+                                        <Shield className="w-5 h-5" /> IP Access Control
+                                    </h4>
+                                    {middlewareSettings && (
+                                        <SecurityAccessControl
+                                            siteId={id}
+                                            middleware={middlewareSettings}
+                                            onUpdateMiddleware={handleUpdateMiddleware}
+                                        />
+                                    )}
+                                </section>
+
+                                <Separator />
+
+                                {/* Custom Headers */}
+                                <section>
+                                    <h4 className="font-medium flex items-center gap-2 mb-4 text-lg">
+                                        <FileText className="w-5 h-5" /> Custom Headers
+                                    </h4>
+                                    <SecurityHeaders siteId={id} />
+                                </section>
+
+                                <Separator />
+
+                                {/* Compression */}
+                                <section>
+                                    <h4 className="font-medium flex items-center gap-2 mb-4 text-lg">
+                                        <Package className="w-5 h-5" /> Compression
+                                    </h4>
+                                    {middlewareSettings && (
+                                        <SecurityMiddleware
+                                            middleware={middlewareSettings}
+                                            onUpdateMiddleware={handleUpdateMiddleware}
+                                        />
+                                    )}
+                                </section>
+                            </CardContent>
+                        </Card>
+                    </section>
+                </section>
+
+                {/* Redirects Section */}
+                <section id="redirects" className="space-y-4 scroll-mt-20">
+                    <section className="space-y-4">
+                        <Card>
+                            <CardContent className="pt-6">
+                                <RedirectsList siteId={id} />
+                            </CardContent>
+                        </Card>
+                    </section>
+                </section>
+
+                {/* Rewrites Section */}
+                <section id="rewrites" className="space-y-4 scroll-mt-20">
+                    <section className="space-y-4">
+                        <Card>
+                            <CardContent className="pt-6">
+                                <RewritesList siteId={id} />
+                            </CardContent>
+                        </Card>
+                    </section>
+                </section>
+
+                {/* Routes Section */}
+                <section id="routes" className="space-y-4 scroll-mt-20">
+                    <section className="space-y-4">
+                        <Card>
+                            <CardHeader className="flex flex-row items-center justify-between">
+                                <div>
+                                    <CardTitle>Routes</CardTitle>
+                                    <CardDescription>Configure request routing and handlers</CardDescription>
+                                </div>
+                                <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                                    <DialogTrigger asChild>
+                                        <Button>
+                                            <Plus className="w-4 h-4 mr-2" />
+                                            Add Route
+                                        </Button>
+                                    </DialogTrigger>
+                                    <DialogContent className="sm:max-w-[600px]">
+                                        <DialogHeader>
+                                            <DialogTitle>Create Route</DialogTitle>
+                                            <DialogDescription>Configure a new route handler</DialogDescription>
+                                        </DialogHeader>
+                                        <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto">
+                                            <div className="grid grid-cols-2 gap-4">
                                                 <div className="grid gap-2">
-                                                    <Label>Upstream Address</Label>
+                                                    <Label htmlFor="routeName">Route Name</Label>
                                                     <Input
-                                                        placeholder="localhost:8080 or http://backend:3000"
-                                                        value={routeForm.upstream_address}
-                                                        onChange={(e) => setRouteForm({ ...routeForm, upstream_address: e.target.value })}
+                                                        id="routeName"
+                                                        placeholder="e.g., api-proxy"
+                                                        value={routeForm.name}
+                                                        onChange={(e) => setRouteForm({ ...routeForm, name: e.target.value })}
                                                     />
                                                 </div>
-                                                {upstreams.length > 0 && (
-                                                    <div className="grid gap-2">
-                                                        <Label>Or Select Upstream</Label>
-                                                        <Select
-                                                            value={routeForm.upstream_address}
-                                                            onValueChange={(value) => setRouteForm({ ...routeForm, upstream_address: value })}
-                                                        >
-                                                            <SelectTrigger>
-                                                                <SelectValue placeholder="Choose existing upstream" />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                {upstreams.map((u) => (
-                                                                    <SelectItem key={u.id} value={u.address}>
-                                                                        {u.name} ({u.address})
-                                                                    </SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-
-                                        {routeForm.handler_type === "file_server" && (
-                                            <div className="space-y-4 p-4 rounded-lg bg-muted/50">
-                                                <h4 className="font-medium">File Server Settings</h4>
                                                 <div className="grid gap-2">
-                                                    <Label>Root Directory</Label>
+                                                    <Label htmlFor="order">Priority Order</Label>
                                                     <Input
-                                                        placeholder="/var/www/html"
-                                                        value={routeForm.file_root}
-                                                        onChange={(e) => setRouteForm({ ...routeForm, file_root: e.target.value })}
+                                                        id="order"
+                                                        type="number"
+                                                        value={routeForm.order}
+                                                        onChange={(e) => setRouteForm({ ...routeForm, order: parseInt(e.target.value) || 0 })}
                                                     />
-                                                </div>
-                                                <div className="flex items-center gap-4">
-                                                    <Switch
-                                                        checked={routeForm.file_browse}
-                                                        onCheckedChange={(checked) => setRouteForm({ ...routeForm, file_browse: checked })}
-                                                    />
-                                                    <Label>Enable directory browsing</Label>
                                                 </div>
                                             </div>
-                                        )}
+                                            <div className="grid gap-2">
+                                                <Label htmlFor="pathMatcher">Path Matcher</Label>
+                                                <Input
+                                                    id="pathMatcher"
+                                                    placeholder="e.g., /api/*, /static/*, /"
+                                                    value={routeForm.path_matcher}
+                                                    onChange={(e) => setRouteForm({ ...routeForm, path_matcher: e.target.value })}
+                                                />
+                                            </div>
+                                            <div className="grid gap-2">
+                                                <Label htmlFor="handlerType">Handler Type</Label>
+                                                <Select
+                                                    value={routeForm.handler_type}
+                                                    onValueChange={(value) => setRouteForm({ ...routeForm, handler_type: value })}
+                                                >
+                                                    <SelectTrigger>
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="reverse_proxy">
+                                                            <div className="flex items-center gap-2">
+                                                                <Server className="w-4 h-4" />
+                                                                Reverse Proxy
+                                                            </div>
+                                                        </SelectItem>
+                                                        <SelectItem value="file_server">File Server</SelectItem>
+                                                        <SelectItem value="static_response">Static Response</SelectItem>
+                                                        <SelectItem value="redirect">Redirect</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
 
-                                        {routeForm.handler_type === "static_response" && (
-                                            <div className="space-y-4 p-4 rounded-lg bg-muted/50">
-                                                <h4 className="font-medium">Static Response Settings</h4>
-                                                <div className="grid grid-cols-2 gap-4">
+                                            <Separator />
+
+                                            {/* Handler-specific fields */}
+                                            {routeForm.handler_type === "reverse_proxy" && (
+                                                <div className="space-y-4 p-4 rounded-lg bg-muted/50">
+                                                    <h4 className="font-medium flex items-center gap-2">
+                                                        <Server className="w-4 h-4" />
+                                                        Reverse Proxy Settings
+                                                    </h4>
                                                     <div className="grid gap-2">
-                                                        <Label>Status Code</Label>
+                                                        <Label>Upstream Address</Label>
                                                         <Input
-                                                            type="number"
-                                                            value={routeForm.response_status}
-                                                            onChange={(e) => setRouteForm({ ...routeForm, response_status: parseInt(e.target.value) || 200 })}
+                                                            placeholder="localhost:8080 or http://backend:3000"
+                                                            value={routeForm.upstream_address}
+                                                            onChange={(e) => setRouteForm({ ...routeForm, upstream_address: e.target.value })}
+                                                        />
+                                                    </div>
+                                                    {upstreams.length > 0 && (
+                                                        <div className="grid gap-2">
+                                                            <Label>Or Select Upstream</Label>
+                                                            <Select
+                                                                value={routeForm.upstream_address}
+                                                                onValueChange={(value) => setRouteForm({ ...routeForm, upstream_address: value })}
+                                                            >
+                                                                <SelectTrigger>
+                                                                    <SelectValue placeholder="Choose existing upstream" />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    {upstreams.map((u) => (
+                                                                        <SelectItem key={u.id} value={u.address}>
+                                                                            {u.name} ({u.address})
+                                                                        </SelectItem>
+                                                                    ))}
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {routeForm.handler_type === "file_server" && (
+                                                <div className="space-y-4 p-4 rounded-lg bg-muted/50">
+                                                    <h4 className="font-medium">File Server Settings</h4>
+                                                    <div className="grid gap-2">
+                                                        <Label>Root Directory</Label>
+                                                        <Input
+                                                            placeholder="/var/www/html"
+                                                            value={routeForm.file_root}
+                                                            onChange={(e) => setRouteForm({ ...routeForm, file_root: e.target.value })}
+                                                        />
+                                                    </div>
+                                                    <div className="flex items-center gap-4">
+                                                        <Switch
+                                                            checked={routeForm.file_browse}
+                                                            onCheckedChange={(checked) => setRouteForm({ ...routeForm, file_browse: checked })}
+                                                        />
+                                                        <Label>Enable directory browsing</Label>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {routeForm.handler_type === "static_response" && (
+                                                <div className="space-y-4 p-4 rounded-lg bg-muted/50">
+                                                    <h4 className="font-medium">Static Response Settings</h4>
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <div className="grid gap-2">
+                                                            <Label>Status Code</Label>
+                                                            <Input
+                                                                type="number"
+                                                                value={routeForm.response_status}
+                                                                onChange={(e) => setRouteForm({ ...routeForm, response_status: parseInt(e.target.value) || 200 })}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <div className="grid gap-2">
+                                                        <Label>Response Body</Label>
+                                                        <Input
+                                                            placeholder="Hello World!"
+                                                            value={routeForm.response_body}
+                                                            onChange={(e) => setRouteForm({ ...routeForm, response_body: e.target.value })}
                                                         />
                                                     </div>
                                                 </div>
-                                                <div className="grid gap-2">
-                                                    <Label>Response Body</Label>
-                                                    <Input
-                                                        placeholder="Hello World!"
-                                                        value={routeForm.response_body}
-                                                        onChange={(e) => setRouteForm({ ...routeForm, response_body: e.target.value })}
-                                                    />
-                                                </div>
-                                            </div>
-                                        )}
+                                            )}
 
-                                        {routeForm.handler_type === "redirect" && (
-                                            <div className="space-y-4 p-4 rounded-lg bg-muted/50">
-                                                <h4 className="font-medium">Redirect Settings</h4>
-                                                <div className="grid gap-2">
-                                                    <Label>Redirect URL</Label>
-                                                    <Input
-                                                        placeholder="https://example.com/new-path"
-                                                        value={routeForm.redirect_url}
-                                                        onChange={(e) => setRouteForm({ ...routeForm, redirect_url: e.target.value })}
-                                                    />
+                                            {routeForm.handler_type === "redirect" && (
+                                                <div className="space-y-4 p-4 rounded-lg bg-muted/50">
+                                                    <h4 className="font-medium">Redirect Settings</h4>
+                                                    <div className="grid gap-2">
+                                                        <Label>Redirect URL</Label>
+                                                        <Input
+                                                            placeholder="https://example.com/new-path"
+                                                            value={routeForm.redirect_url}
+                                                            onChange={(e) => setRouteForm({ ...routeForm, redirect_url: e.target.value })}
+                                                        />
+                                                    </div>
+                                                    <div className="flex items-center gap-4">
+                                                        <Switch
+                                                            checked={routeForm.redirect_permanent}
+                                                            onCheckedChange={(checked) => setRouteForm({ ...routeForm, redirect_permanent: checked })}
+                                                        />
+                                                        <Label>Permanent redirect (301)</Label>
+                                                    </div>
                                                 </div>
-                                                <div className="flex items-center gap-4">
-                                                    <Switch
-                                                        checked={routeForm.redirect_permanent}
-                                                        onCheckedChange={(checked) => setRouteForm({ ...routeForm, redirect_permanent: checked })}
-                                                    />
-                                                    <Label>Permanent redirect (301)</Label>
-                                                </div>
-                                            </div>
-                                        )}
+                                            )}
+                                        </div>
+                                        <DialogFooter>
+                                            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+                                                Cancel
+                                            </Button>
+                                            <Button onClick={handleCreateRoute} disabled={!routeForm.path_matcher}>
+                                                Create Route
+                                            </Button>
+                                        </DialogFooter>
+                                    </DialogContent>
+                                </Dialog>
+                            </CardHeader>
+                            <CardContent className="p-0">
+                                {routes.length === 0 ? (
+                                    <div className="p-12 text-center">
+                                        <RouteIcon className="w-12 h-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+                                        <h3 className="text-lg font-medium mb-2">No routes yet</h3>
+                                        <p className="text-muted-foreground mb-4">Add routes to handle requests</p>
+                                        <Button onClick={() => setDialogOpen(true)}>
+                                            <Plus className="w-4 h-4 mr-2" />
+                                            Add Route
+                                        </Button>
                                     </div>
-                                    <DialogFooter>
-                                        <Button variant="outline" onClick={() => setDialogOpen(false)}>
-                                            Cancel
-                                        </Button>
-                                        <Button onClick={handleCreateRoute} disabled={!routeForm.path_matcher}>
-                                            Create Route
-                                        </Button>
-                                    </DialogFooter>
-                                </DialogContent>
-                            </Dialog>
-                        </CardHeader>
-                        <CardContent className="p-0">
-                            {routes.length === 0 ? (
-                                <div className="p-12 text-center">
-                                    <RouteIcon className="w-12 h-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-                                    <h3 className="text-lg font-medium mb-2">No routes yet</h3>
-                                    <p className="text-muted-foreground mb-4">Add routes to handle requests</p>
-                                    <Button onClick={() => setDialogOpen(true)}>
-                                        <Plus className="w-4 h-4 mr-2" />
-                                        Add Route
-                                    </Button>
-                                </div>
-                            ) : (
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Name</TableHead>
-                                            <TableHead>Path</TableHead>
-                                            <TableHead>Handler</TableHead>
-                                            <TableHead>Order</TableHead>
-                                            <TableHead>Status</TableHead>
-                                            <TableHead className="text-right">Actions</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {routes.map((route) => (
-                                            <TableRow key={route.id}>
-                                                <TableCell className="font-medium">{route.name || "Unnamed"}</TableCell>
-                                                <TableCell>
-                                                    <code className="text-sm bg-muted px-2 py-1 rounded">
-                                                        {route.path_matcher}
-                                                    </code>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Badge variant="outline">{route.handler_type}</Badge>
-                                                </TableCell>
-                                                <TableCell>{route.order}</TableCell>
-                                                <TableCell>
-                                                    <Badge variant={route.enabled ? "default" : "secondary"}>
-                                                        {route.enabled ? "Active" : "Disabled"}
-                                                    </Badge>
-                                                </TableCell>
-                                                <TableCell className="text-right">
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="text-destructive hover:text-destructive"
-                                                        onClick={() => handleDeleteRoute(route.id, route.name)}
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </Button>
-                                                </TableCell>
+                                ) : (
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Name</TableHead>
+                                                <TableHead>Path</TableHead>
+                                                <TableHead>Handler</TableHead>
+                                                <TableHead>Order</TableHead>
+                                                <TableHead>Status</TableHead>
+                                                <TableHead className="text-right">Actions</TableHead>
                                             </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            )}
-                        </CardContent>
-                    </Card>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {routes.map((route) => (
+                                                <TableRow key={route.id}>
+                                                    <TableCell className="font-medium">{route.name || "Unnamed"}</TableCell>
+                                                    <TableCell>
+                                                        <code className="text-sm bg-muted px-2 py-1 rounded">
+                                                            {route.path_matcher}
+                                                        </code>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Badge variant="outline">{route.handler_type}</Badge>
+                                                    </TableCell>
+                                                    <TableCell>{route.order}</TableCell>
+                                                    <TableCell>
+                                                        <Badge variant={route.enabled ? "default" : "secondary"}>
+                                                            {route.enabled ? "Active" : "Disabled"}
+                                                        </Badge>
+                                                    </TableCell>
+                                                    <TableCell className="text-right">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="text-destructive hover:text-destructive"
+                                                            onClick={() => handleDeleteRoute(route.id, route.name)}
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </Button>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </section>
                 </section>
-            </div>
+
+                {/* Files Section */}
+                <section id="files" className="space-y-4 scroll-mt-20">
+                    <section className="space-y-4">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center justify-between">
+                                    <span>Static Files</span>
+                                    <span className="text-sm font-normal text-muted-foreground">{sitePath}</span>
+                                </CardTitle>
+                                <CardDescription>
+                                    Upload and manage static files for this site. Files are served via file_server routes.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                {/* Breadcrumb navigation */}
+                                <div className="flex items-center gap-2 text-sm">
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                            setCurrentPath('/');
+                                            loadFiles('/');
+                                        }}
+                                        disabled={currentPath === '/'}
+                                    >
+                                        Root
+                                    </Button>
+                                    {currentPath !== '/' && currentPath.split('/').filter(Boolean).map((segment, idx, arr) => {
+                                        const path = '/' + arr.slice(0, idx + 1).join('/');
+                                        return (
+                                            <span key={path} className="flex items-center gap-2">
+                                                <span>/</span>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        setCurrentPath(path);
+                                                        loadFiles(path);
+                                                    }}
+                                                >
+                                                    {segment}
+                                                </Button>
+                                            </span>
+                                        );
+                                    })}
+                                </div>
+
+                                {/* Upload zone */}
+                                <div
+                                    className="border-2 border-dashed rounded-lg p-8 text-center hover:border-primary/50 transition-colors cursor-pointer"
+                                    onDragOver={(e) => e.preventDefault()}
+                                    onDrop={async (e) => {
+                                        e.preventDefault();
+                                        const files = e.dataTransfer.files;
+                                        if (files.length > 0) {
+                                            await handleUpload(files);
+                                        }
+                                    }}
+                                    onClick={() => document.getElementById('file-upload')?.click()}
+                                >
+                                    <input
+                                        type="file"
+                                        id="file-upload"
+                                        className="hidden"
+                                        multiple
+                                        onChange={async (e) => {
+                                            if (e.target.files && e.target.files.length > 0) {
+                                                await handleUpload(e.target.files);
+                                                e.target.value = '';
+                                            }
+                                        }}
+                                    />
+                                    {uploading ? (
+                                        <div className="flex flex-col items-center gap-2">
+                                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                                            <span>Uploading...</span>
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col items-center gap-2">
+                                            <Upload className="h-8 w-8 text-muted-foreground" />
+                                            <span className="text-muted-foreground">Drop files here or click to upload</span>
+                                            <span className="text-xs text-muted-foreground">Supports .zip, .tar, .tar.gz (auto-extracted)</span>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* File list */}
+                                {files.length === 0 ? (
+                                    <div className="text-center py-8 text-muted-foreground">
+                                        No files uploaded yet
+                                    </div>
+                                ) : (
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Name</TableHead>
+                                                <TableHead>Size</TableHead>
+                                                <TableHead>Modified</TableHead>
+                                                <TableHead className="w-[100px]">Actions</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {files.map((file) => (
+                                                <TableRow key={file.path}>
+                                                    <TableCell>
+                                                        {file.type === 'directory' ? (
+                                                            <button
+                                                                className="flex items-center gap-2 text-primary hover:underline"
+                                                                onClick={() => {
+                                                                    setCurrentPath(file.path);
+                                                                    loadFiles(file.path);
+                                                                }}
+                                                            >
+                                                                <Folder className="h-4 w-4" />
+                                                                {file.name}
+                                                            </button>
+                                                        ) : (
+                                                            <span className="flex items-center gap-2">
+                                                                <FileIcon className="h-4 w-4" />
+                                                                {file.name}
+                                                            </span>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {file.type === 'directory' ? '-' : formatBytes(file.size)}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {new Date(file.modified).toLocaleString()}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={async () => {
+                                                                if (confirm(`Delete ${file.name}?`)) {
+                                                                    try {
+                                                                        await deleteFile(id, file.path);
+                                                                        loadFiles(currentPath);
+                                                                    } catch (err) {
+                                                                        console.error('Delete failed:', err);
+                                                                    }
+                                                                }
+                                                            }}
+                                                        >
+                                                            <Trash2 className="h-4 w-4 text-destructive" />
+                                                        </Button>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </section>
+                </section>
+            </div >
             <ConfirmDialog
                 open={!!routeToDelete}
                 onOpenChange={(open) => !open && setRouteToDelete(null)}
@@ -983,6 +1234,6 @@ export default function SiteDetailClient() {
                 confirmText="Delete Route"
                 variant="destructive"
             />
-        </div>
+        </div >
     );
 }

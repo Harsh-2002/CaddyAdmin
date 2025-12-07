@@ -19,6 +19,10 @@ import {
     Shield,
     LogOut,
     User,
+    Lock,
+    Shuffle,
+    Route,
+    Network,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -35,14 +39,18 @@ import Image from "next/image";
 
 const navigation = [
     { name: "Dashboard", href: "/", icon: LayoutDashboard, color: "text-sky-500" },
-    { name: "Metrics", href: "/metrics", icon: Activity, color: "text-violet-500" },
-    { name: "SSL/TLS", href: "/ssl", icon: Shield, color: "text-rose-500" },
-    { name: "Sites", href: "/sites", icon: Globe, color: "text-indigo-500" },
+    { name: "Sites", href: "/sites", icon: Globe, color: "text-blue-600" },
     { name: "Upstreams", href: "/upstreams", icon: Server, color: "text-emerald-500" },
-    { name: "Upstream Groups", href: "/upstream-groups", icon: Layers, color: "text-teal-500" },
+    { name: "Groups", href: "/upstream-groups", icon: Layers, color: "text-teal-500" },
+    { name: "Redirects", href: "/redirects", icon: Route, color: "text-orange-500" },
+    { name: "Rewrites", href: "/rewrites", icon: Shuffle, color: "text-pink-500" },
+    { name: "Security", href: "/security", icon: Shield, color: "text-red-600" },
+    { name: "SSL", href: "/ssl", icon: Lock, color: "text-green-600" },
+    { name: "DNS", href: "/dns-providers", icon: Network, color: "text-violet-500" },
+    { name: "Metrics", href: "/metrics", icon: Activity, color: "text-indigo-500" },
     { name: "Logs", href: "/logs", icon: ScrollText, color: "text-amber-500" },
-    { name: "Caddyfile", href: "/caddyfile", icon: FileCode, color: "text-slate-400" },
-    { name: "History", href: "/history", icon: History, color: "text-orange-500" },
+    { name: "Caddyfile", href: "/caddyfile", icon: FileCode, color: "text-slate-500" },
+    { name: "History", href: "/history", icon: History, color: "text-stone-500" },
     { name: "Settings", href: "/settings", icon: Settings, color: "text-gray-500" },
 ];
 

@@ -113,7 +113,7 @@ func ValidateCredentials(username, password string) bool {
 		return false
 	}
 	
-	log.Printf("✅ Login successful for user: %s", username)
+	log.Printf("Login successful")
 	return true
 }
 

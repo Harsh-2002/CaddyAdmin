@@ -127,48 +127,8 @@ func (h *ConfigHandler) DeleteCaddyConfigPath(c *gin.Context) {
 // SyncConfig rebuilds and applies configuration from database to Caddy
 // POST /api/config/sync
 func (h *ConfigHandler) SyncConfig(c *gin.Context) {
-	// Get all sites
-	var sites []models.Site
-	database.GetDB().Where("enabled = ?", true).Find(&sites)
-
-	// Get routes for each site
-	routesMap := make(map[string][]models.Route)
-	for _, site := range sites {
-		var routes []models.Route
-		database.GetDB().Where("site_id = ? AND enabled = ?", site.ID, true).Order("`order` ASC").Find(&routes)
-		routesMap[site.ID] = routes
-	}
-
-	// Get redirect rules
-	redirectsMap := make(map[string][]models.RedirectRule)
-	for _, site := range sites {
-		var rules []models.RedirectRule
-		database.GetDB().Where("site_id = ? AND enabled = ?", site.ID, true).Order("priority DESC, created_at DESC").Find(&rules)
-		redirectsMap[site.ID] = rules
-	}
-
-	// Get upstream groups
-	var upstreamGroups []models.UpstreamGroup
-	database.GetDB().Find(&upstreamGroups)
-	groupsMap := make(map[string]*models.UpstreamGroup)
-	upstreamsMap := make(map[string][]models.Upstream)
-	for i := range upstreamGroups {
-		groupsMap[upstreamGroups[i].Name] = &upstreamGroups[i]
-		var upstreams []models.Upstream
-		database.GetDB().Model(&upstreamGroups[i]).Association("Upstreams").Find(&upstreams)
-		upstreamsMap[upstreamGroups[i].Name] = upstreams
-	}
-
-	// Get global settings
-	var settings models.GlobalSettings
-	database.GetDB().First(&settings)
-
-	// Get custom certificates
-	var certificates []models.CustomCertificate
-	database.GetDB().Find(&certificates)
-
 	// Build configuration
-	config, err := h.configBuilder.BuildFullConfig(sites, routesMap, redirectsMap, groupsMap, upstreamsMap, certificates, &settings)
+	config, err := h.configBuilder.BuildFromDB()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

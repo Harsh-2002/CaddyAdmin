@@ -15,6 +15,7 @@ type Config struct {
 	ServerPort        string
 	CaddyAPIURL       string
 	DatabasePath      string
+	SitesPath         string // Base path for site files
 	Environment       string
 	AdminUser         string
 	AdminPasswordHash string
@@ -28,9 +29,9 @@ func Load() *Config {
 	// Load .env file from project root (2 levels up from backend)
 	envPath := filepath.Join("..", "..", ".env")
 	if err := godotenv.Load(envPath); err != nil {
-		log.Printf("⚠️  .env file not found at %s, using system environment variables", envPath)
+		log.Printf("Warning: .env file not found at %s, using system environment variables", envPath)
 	} else {
-		log.Printf("✅ Loaded environment from %s", envPath)
+		log.Printf("Loaded environment from %s", envPath)
 	}
 
 	sessionDuration, _ := strconv.Atoi(getEnv("SESSION_DURATION", "8"))
@@ -46,6 +47,7 @@ func Load() *Config {
 		ServerPort:        getEnv("SERVER_PORT", "4000"),
 		CaddyAPIURL:       getEnv("CADDY_API_URL", "http://localhost:2019"),
 		DatabasePath:      getEnv("DATABASE_PATH", "./caddyadmin.db"),
+		SitesPath:         getEnv("SITES_PATH", "/var/www"),
 		Environment:       getEnv("ENVIRONMENT", "development"),
 		AdminUser:         getEnv("ADMIN_USER", "admin"),
 		AdminPasswordHash: getEnv("ADMIN_PASSWORD_HASH", ""),
@@ -55,20 +57,16 @@ func Load() *Config {
 	}
 
 	// Log loaded configuration (mask sensitive data)
-	log.Println("📋 Configuration loaded:")
-	log.Printf("  - ADMIN_USER: %s", cfg.AdminUser)
-	log.Printf("  - ADMIN_PASSWORD_HASH: %s", maskSensitive(cfg.AdminPasswordHash))
+	log.Println("Configuration loaded:")
 	log.Printf("  - CADDY_API_URL: %s", cfg.CaddyAPIURL)
 	log.Printf("  - SERVER_PORT: %s", cfg.ServerPort)
 	log.Printf("  - DATABASE_PATH: %s", cfg.DatabasePath)
-	log.Printf("  - SESSION_DURATION: %d hours", cfg.SessionDuration)
-	log.Printf("  - COOKIE_SECURE: %v", cfg.CookieSecure)
-	log.Printf("  - JWT_SECRET: %s", maskSensitive(cfg.JWTSecret))
+	log.Printf("  - SITES_PATH: %s", cfg.SitesPath)
 	log.Printf("  - ENVIRONMENT: %s", cfg.Environment)
 
 	// Validate required configuration
 	if err := cfg.Validate(); err != nil {
-		log.Fatalf("❌ Configuration error: %v", err)
+		log.Fatalf("Configuration error: %v", err)
 	}
 
 	return cfg

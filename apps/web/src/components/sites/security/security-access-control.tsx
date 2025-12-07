@@ -39,6 +39,7 @@ import {
     type AccessRule,
     type MiddlewareSettings,
 } from "@/lib/api";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 interface SecurityAccessControlProps {
     siteId: string;
@@ -50,6 +51,7 @@ export function SecurityAccessControl({ siteId, middleware, onUpdateMiddleware }
     const [rules, setRules] = useState<AccessRule[]>([]);
     const [loading, setLoading] = useState(true);
     const [dialogOpen, setDialogOpen] = useState(false);
+    const [deleteId, setDeleteId] = useState<string | null>(null);
     const [newRule, setNewRule] = useState({ cidr: "", rule_type: "allow" });
 
     useEffect(() => {
@@ -202,7 +204,7 @@ export function SecurityAccessControl({ siteId, middleware, onUpdateMiddleware }
                                                     variant="ghost"
                                                     size="icon"
                                                     className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                                    onClick={() => handleDeleteRule(rule.id)}
+                                                    onClick={() => setDeleteId(rule.id)}
                                                 >
                                                     <Trash2 className="w-4 h-4" />
                                                 </Button>
@@ -220,6 +222,14 @@ export function SecurityAccessControl({ siteId, middleware, onUpdateMiddleware }
                     </div>
                 </div>
             )}
+            <ConfirmDialog
+                open={!!deleteId}
+                onOpenChange={(open) => !open && setDeleteId(null)}
+                title="Delete Access Rule?"
+                description="This action cannot be undone."
+                onConfirm={() => deleteId && handleDeleteRule(deleteId)}
+                variant="destructive"
+            />
         </div>
     );
 }

@@ -82,7 +82,7 @@ func GetHub() *Hub {
 		}
 		go hub.run()
 		go hub.heartbeat()
-		log.Println("✅ SSE Hub initialized")
+		log.Println("SSE Hub initialized")
 	})
 	return hub
 }

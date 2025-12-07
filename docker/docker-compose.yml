@@ -9,7 +9,9 @@ services:
   # Caddy Server (Managed by CaddyAdmin)
   # ---------------------------------------------------------------------------
   caddy:
-    image: caddy:2-alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.caddy
     container_name: caddy
     restart: unless-stopped
     ports:
@@ -18,6 +20,7 @@ services:
     volumes:
       - caddy_data:/data
       - caddy_config:/config
+      - sites_data:/srv/sites:ro  # Shared static files (read-only for Caddy)
     environment:
       - CADDY_ADMIN=0.0.0.0:2019
     command: caddy run --config /etc/caddy/Caddyfile --adapter caddyfile --watch
@@ -53,11 +56,13 @@ services:
       - "4000:4000"
     environment:
       - CADDY_ADMIN_URL=http://caddy:2019
+      - SITES_PATH=/data/sites
       - GIN_MODE=release
       - ENVIRONMENT=production
       - TZ=UTC
     volumes:
       - manager_data:/app/data
+      - sites_data:/data/sites  # Shared static files (read-write for admin)
     depends_on:
       caddy:
         condition: service_healthy
@@ -106,4 +111,6 @@ volumes:
   caddy_config:
     driver: local
   manager_data:
+    driver: local
+  sites_data:
     driver: local

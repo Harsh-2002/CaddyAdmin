@@ -29,7 +29,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
-import { getSites, createSite, deleteSite, type Site } from "@/lib/api";
+import { getSites, createSite, deleteSite, createRoute, getFiles, type Site } from "@/lib/api";
 
 export default function SitesPage() {
     const [sites, setSites] = useState<Site[]>([]);
@@ -44,6 +44,7 @@ export default function SitesPage() {
         listen_port: 443,
         auto_https: true,
         tls_enabled: true,
+        serve_static: true,
     });
 
     useEffect(() => {
@@ -64,16 +65,40 @@ export default function SitesPage() {
     async function handleCreate() {
         try {
             const hosts = formData.hosts.split(",").map((h) => h.trim()).filter(Boolean);
-            await createSite({
+            const newSite = await createSite({
                 name: formData.name,
                 hosts,
                 listen_port: formData.listen_port,
                 auto_https: formData.auto_https,
                 tls_enabled: formData.tls_enabled,
+                enabled: true,
             });
+
+            if (formData.serve_static && newSite.id) {
+                try {
+                    // Get the site's public path (creates directory if missing)
+                    const filesInfo = await getFiles(newSite.id, "/");
+
+                    // Create file_server route
+                    await createRoute(newSite.id, {
+                        path_matcher: "/",
+                        match_type: "path",
+                        handler_type: "file_server",
+                        handler_config: JSON.stringify({
+                            root: filesInfo.site_path,
+                            browse: true
+                        }),
+                        enabled: true
+                    });
+                } catch (err) {
+                    console.error("Failed to create default route:", err);
+                    toast.error("Site created, but failed to setup file server");
+                }
+            }
+
             toast.success("Site created successfully");
             setDialogOpen(false);
-            setFormData({ name: "", hosts: "", listen_port: 443, auto_https: true, tls_enabled: true });
+            setFormData({ name: "", hosts: "", listen_port: 443, auto_https: true, tls_enabled: true, serve_static: true });
             loadSites();
         } catch (error) {
             toast.error("Failed to create site");
@@ -153,6 +178,16 @@ export default function SitesPage() {
                                 <Switch
                                     checked={formData.auto_https}
                                     onCheckedChange={(checked) => setFormData({ ...formData, auto_https: checked, tls_enabled: checked })}
+                                />
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <div className="space-y-1">
+                                    <Label>Serve Static Files</Label>
+                                    <p className="text-sm text-muted-foreground">Enable built-in file server</p>
+                                </div>
+                                <Switch
+                                    checked={formData.serve_static}
+                                    onCheckedChange={(checked) => setFormData({ ...formData, serve_static: checked })}
                                 />
                             </div>
                         </div>

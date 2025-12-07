@@ -14,9 +14,9 @@ type Site struct {
 	Hosts       []string  `gorm:"-" json:"hosts"`                           // Handled via HostsJSON
 	HostsJSON   string    `gorm:"column:hosts;type:text" json:"-"`          // Stored as JSON string
 	ListenPort  int       `gorm:"default:443" json:"listen_port"`
-	AutoHTTPS   bool      `gorm:"default:true" json:"auto_https"`
-	TLSEnabled  bool      `gorm:"default:true" json:"tls_enabled"`
-	Enabled     bool      `gorm:"default:true" json:"enabled"`
+	AutoHTTPS   bool      `json:"auto_https"`
+	TLSEnabled  bool      `json:"tls_enabled"`
+	Enabled     bool      `json:"enabled"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 	Routes      []Route   `gorm:"foreignKey:SiteID;constraint:OnDelete:CASCADE" json:"routes,omitempty"`
@@ -108,6 +108,7 @@ type TLSConfig struct {
 	ACMEProvider       string    `gorm:"default:letsencrypt" json:"acme_provider"` // letsencrypt, zerossl, custom
 	OnDemandTLS        bool      `gorm:"default:false" json:"on_demand_tls"`
 	WildcardCert       bool      `gorm:"default:false" json:"wildcard_cert"`
+	DNSProviderID      string    `json:"dns_provider_id"`
 	CustomCertPath     string    `json:"custom_cert_path"`
 	CustomKeyPath      string    `json:"custom_key_path"`
 	MinVersion         string    `gorm:"default:tls1.2" json:"min_version"` // tls1.0, tls1.1, tls1.2, tls1.3
@@ -363,3 +364,23 @@ func (c *CustomCertificate) BeforeCreate(tx *gorm.DB) error {
 	}
 	return nil
 }
+
+// DNSProvider represents a configured DNS provider for ACME DNS challenges
+type DNSProvider struct {
+	ID          string    `gorm:"primaryKey;type:varchar(36)" json:"id"`
+	Name        string    `gorm:"not null" json:"name"`                    // User-friendly name
+	Provider    string    `gorm:"not null" json:"provider"`                // cloudflare, route53, etc.
+	Credentials string    `gorm:"type:text" json:"-"`                      // Encrypted JSON credentials
+	IsDefault   bool      `gorm:"default:false" json:"is_default"`         // Default provider for DNS challenges
+	Enabled     bool      `gorm:"default:true" json:"enabled"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+func (d *DNSProvider) BeforeCreate(tx *gorm.DB) error {
+	if d.ID == "" {
+		d.ID = uuid.New().String()
+	}
+	return nil
+}
+

@@ -19,6 +19,12 @@ func NewMiddlewareHandler() *MiddlewareHandler {
 }
 
 // GetMiddlewareSettings retrieves middleware settings for a site
+// @Summary      Get middleware settings
+// @Description  Get middleware settings for a specific site
+// @Tags         sites
+// @Param        id   path      string  true  "Site ID"
+// @Success      200  {object}  models.MiddlewareSettings
+// @Router       /sites/{id}/middleware [get]
 func (h *MiddlewareHandler) GetMiddlewareSettings(c *gin.Context) {
 	siteID := c.Param("id")
 
@@ -41,6 +47,13 @@ func (h *MiddlewareHandler) GetMiddlewareSettings(c *gin.Context) {
 }
 
 // UpdateMiddlewareSettings updates middleware settings for a site
+// @Summary      Update middleware settings
+// @Description  Update middleware settings for a specific site
+// @Tags         sites
+// @Param        id        path      string                     true  "Site ID"
+// @Param        settings  body      models.MiddlewareSettings  true  "Middleware Settings"
+// @Success      200       {object}  models.MiddlewareSettings
+// @Router       /sites/{id}/middleware [put]
 func (h *MiddlewareHandler) UpdateMiddlewareSettings(c *gin.Context) {
 	siteID := c.Param("id")
 
@@ -84,6 +97,12 @@ func (h *MiddlewareHandler) UpdateMiddlewareSettings(c *gin.Context) {
 // --- Basic Auth Users ---
 
 // ListBasicAuthUsers lists all basic auth users for a site
+// @Summary      List basic auth users
+// @Description  List all basic auth users for a specific site
+// @Tags         sites
+// @Param        id   path      string  true  "Site ID"
+// @Success      200  {object}  map[string][]models.BasicAuthUser
+// @Router       /sites/{id}/basic-auth [get]
 func (h *MiddlewareHandler) ListBasicAuthUsers(c *gin.Context) {
 	siteID := c.Param("id")
 
@@ -109,6 +128,13 @@ type CreateBasicAuthUserRequest struct {
 }
 
 // CreateBasicAuthUser creates a new basic auth user
+// @Summary      Create basic auth user
+// @Description  Create a new basic auth user for a site
+// @Tags         sites
+// @Param        id    path      string                      true  "Site ID"
+// @Param        user  body      CreateBasicAuthUserRequest  true  "User JSON"
+// @Success      201   {object}  models.BasicAuthUser
+// @Router       /sites/{id}/basic-auth [post]
 func (h *MiddlewareHandler) CreateBasicAuthUser(c *gin.Context) {
 	siteID := c.Param("id")
 
@@ -147,6 +173,12 @@ func (h *MiddlewareHandler) CreateBasicAuthUser(c *gin.Context) {
 }
 
 // DeleteBasicAuthUser deletes a basic auth user
+// @Summary      Delete basic auth user
+// @Description  Delete a basic auth user by ID
+// @Tags         basic-auth
+// @Param        userId  path      string  true  "User ID"
+// @Success      200     {object}  map[string]string
+// @Router       /basic-auth/{userId} [delete]
 func (h *MiddlewareHandler) DeleteBasicAuthUser(c *gin.Context) {
 	id := c.Param("userId")
 
@@ -161,6 +193,12 @@ func (h *MiddlewareHandler) DeleteBasicAuthUser(c *gin.Context) {
 // --- Header Rules ---
 
 // ListHeaderRules lists all header rules for a site
+// @Summary      List header rules
+// @Description  List all header rules for a specific site
+// @Tags         sites
+// @Param        id   path      string  true  "Site ID"
+// @Success      200  {object}  map[string][]models.HeaderRule
+// @Router       /sites/{id}/headers [get]
 func (h *MiddlewareHandler) ListHeaderRules(c *gin.Context) {
 	siteID := c.Param("id")
 
@@ -183,6 +221,13 @@ type CreateHeaderRuleRequest struct {
 }
 
 // CreateHeaderRule creates a new header rule
+// @Summary      Create header rule
+// @Description  Create a new header rule for a site
+// @Tags         sites
+// @Param        id    path      string                   true  "Site ID"
+// @Param        rule  body      CreateHeaderRuleRequest  true  "Rule JSON"
+// @Success      201   {object}  models.HeaderRule
+// @Router       /sites/{id}/headers [post]
 func (h *MiddlewareHandler) CreateHeaderRule(c *gin.Context) {
 	siteID := c.Param("id")
 
@@ -211,6 +256,12 @@ func (h *MiddlewareHandler) CreateHeaderRule(c *gin.Context) {
 }
 
 // DeleteHeaderRule deletes a header rule
+// @Summary      Delete header rule
+// @Description  Delete a header rule by ID
+// @Tags         header-rules
+// @Param        userId  path      string  true  "Rule ID"
+// @Success      200     {object}  map[string]string
+// @Router       /headers/{userId} [delete]
 func (h *MiddlewareHandler) DeleteHeaderRule(c *gin.Context) {
 	id := c.Param("userId")
 
@@ -225,6 +276,12 @@ func (h *MiddlewareHandler) DeleteHeaderRule(c *gin.Context) {
 // --- Access Rules ---
 
 // ListAccessRules lists all access rules for a site
+// @Summary      List access rules
+// @Description  List all access rules for a specific site
+// @Tags         sites
+// @Param        id   path      string  true  "Site ID"
+// @Success      200  {object}  map[string][]models.AccessRule
+// @Router       /sites/{id}/access-rules [get]
 func (h *MiddlewareHandler) ListAccessRules(c *gin.Context) {
 	siteID := c.Param("id")
 
@@ -245,6 +302,13 @@ type CreateAccessRuleRequest struct {
 }
 
 // CreateAccessRule creates a new access rule
+// @Summary      Create access rule
+// @Description  Create a new access rule for a site
+// @Tags         sites
+// @Param        id    path      string                   true  "Site ID"
+// @Param        rule  body      CreateAccessRuleRequest  true  "Rule JSON"
+// @Success      201   {object}  models.AccessRule
+// @Router       /sites/{id}/access-rules [post]
 func (h *MiddlewareHandler) CreateAccessRule(c *gin.Context) {
 	siteID := c.Param("id")
 
@@ -271,6 +335,12 @@ func (h *MiddlewareHandler) CreateAccessRule(c *gin.Context) {
 }
 
 // DeleteAccessRule deletes an access rule
+// @Summary      Delete access rule
+// @Description  Delete an access rule by ID
+// @Tags         access-rules
+// @Param        userId  path      string  true  "Rule ID"
+// @Success      200     {object}  map[string]string
+// @Router       /access-rules/{userId} [delete]
 func (h *MiddlewareHandler) DeleteAccessRule(c *gin.Context) {
 	id := c.Param("userId")
 
@@ -285,6 +355,12 @@ func (h *MiddlewareHandler) DeleteAccessRule(c *gin.Context) {
 // --- Rewrite Rules ---
 
 // ListRewriteRules lists all rewrite rules for a site
+// @Summary      List rewrite rules
+// @Description  List all rewrite rules for a specific site
+// @Tags         sites
+// @Param        id   path      string  true  "Site ID"
+// @Success      200  {object}  map[string][]models.RewriteRule
+// @Router       /sites/{id}/rewrites [get]
 func (h *MiddlewareHandler) ListRewriteRules(c *gin.Context) {
 	siteID := c.Param("id")
 
@@ -307,6 +383,13 @@ type CreateRewriteRuleRequest struct {
 }
 
 // CreateRewriteRule creates a new rewrite rule
+// @Summary      Create rewrite rule
+// @Description  Create a new rewrite rule for a site
+// @Tags         sites
+// @Param        id    path      string                    true  "Site ID"
+// @Param        rule  body      CreateRewriteRuleRequest  true  "Rule JSON"
+// @Success      201   {object}  models.RewriteRule
+// @Router       /sites/{id}/rewrites [post]
 func (h *MiddlewareHandler) CreateRewriteRule(c *gin.Context) {
 	siteID := c.Param("id")
 
@@ -339,6 +422,12 @@ func (h *MiddlewareHandler) CreateRewriteRule(c *gin.Context) {
 }
 
 // DeleteRewriteRule deletes a rewrite rule
+// @Summary      Delete rewrite rule
+// @Description  Delete a rewrite rule by ID
+// @Tags         rewrites
+// @Param        id   path      string  true  "Rule ID"
+// @Success      200  {object}  map[string]string
+// @Router       /rewrites/{id} [delete]
 func (h *MiddlewareHandler) DeleteRewriteRule(c *gin.Context) {
 	ruleID := c.Param("id")
 	if err := database.DB.Delete(&models.RewriteRule{}, "id = ?", ruleID).Error; err != nil {

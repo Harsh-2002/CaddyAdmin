@@ -1,6 +1,7 @@
 package caddy
 
 import (
+	"caddyadmin/database"
 	"caddyadmin/models"
 	"encoding/json"
 	"fmt"
@@ -189,7 +190,15 @@ func (cb *ConfigBuilder) BuildSiteConfig(site *models.Site, routes []models.Rout
 			match.Host = site.Hosts
 		}
 		if route.PathMatcher != "" {
-			match.Path = []string{route.PathMatcher}
+			pathMatch := route.PathMatcher
+			// For file_server, use wildcard matching so all files are served
+			if route.HandlerType == "file_server" && (pathMatch == "/" || pathMatch == "") {
+				pathMatch = "/*"
+			}
+			match.Path = []string{pathMatch}
+		} else if route.HandlerType == "file_server" {
+			// Default to wildcard for file_server with no path specified
+			match.Path = []string{"/*"}
 		}
 		
 		// Parse methods
@@ -305,6 +314,16 @@ func (cb *ConfigBuilder) buildHandler(route models.Route, upstreamGroups map[str
 // TLSApp represents the TLS app configuration
 type TLSApp struct {
 	Certificates map[string]interface{} `json:"certificates,omitempty"`
+	Automation   *TLSAutomation         `json:"automation,omitempty"`
+}
+
+type TLSAutomation struct {
+	Policies []TLSPolicy `json:"policies,omitempty"`
+}
+
+type TLSPolicy struct {
+	Subjects []string      `json:"subjects,omitempty"`
+	Issuers  []interface{} `json:"issuers,omitempty"`
 }
 
 // PEMCertKeyPair represents a certificate key pair for load_pem
@@ -315,7 +334,7 @@ type PEMCertKeyPair struct {
 }
 
 // BuildFullConfig builds the complete Caddy configuration from database models
-func (cb *ConfigBuilder) BuildFullConfig(sites []models.Site, routes map[string][]models.Route, redirectRules map[string][]models.RedirectRule, upstreamGroups map[string]*models.UpstreamGroup, upstreams map[string][]models.Upstream, certificates []models.CustomCertificate, settings *models.GlobalSettings) (*CaddyConfig, error) {
+func (cb *ConfigBuilder) BuildFullConfig(sites []models.Site, routes map[string][]models.Route, redirectRules map[string][]models.RedirectRule, upstreamGroups map[string]*models.UpstreamGroup, upstreams map[string][]models.Upstream, certificates []models.CustomCertificate, settings *models.GlobalSettings, tlsConfigs map[string]models.TLSConfig, dnsProviders map[string]models.DNSProvider) (*CaddyConfig, error) {
 	config := &CaddyConfig{
 		Apps: make(map[string]interface{}),
 	}
@@ -324,11 +343,13 @@ func (cb *ConfigBuilder) BuildFullConfig(sites []models.Site, routes map[string]
 		Servers: make(map[string]*HTTPServer),
 	}
 
-	// TLS App configuration for custom certificates
+	// TLS App configuration
+	tlsApp := TLSApp{
+		Certificates: make(map[string]interface{}),
+	}
+
+	// 1. Custom Certificates
 	if len(certificates) > 0 {
-		tlsApp := TLSApp{
-			Certificates: make(map[string]interface{}),
-		}
 		
 		var pemLoader []PEMCertKeyPair
 		for _, cert := range certificates {
@@ -340,6 +361,70 @@ func (cb *ConfigBuilder) BuildFullConfig(sites []models.Site, routes map[string]
 		}
 		
 		tlsApp.Certificates["load_pem"] = pemLoader
+	}
+
+	// 2. DNS Automation Policies
+	var policies []TLSPolicy
+	for _, site := range sites {
+		tlsConfig, ok := tlsConfigs[site.ID]
+		if !ok || !tlsConfig.WildcardCert || tlsConfig.DNSProviderID == "" {
+			continue
+		}
+
+		// Find DNS Provider
+		provider, ok := dnsProviders[tlsConfig.DNSProviderID]
+		if !ok {
+			continue
+		}
+
+		// Parse Credentials
+		var creds map[string]interface{}
+		if err := json.Unmarshal([]byte(provider.Credentials), &creds); err != nil {
+			fmt.Printf("Error parsing credentials for provider %s: %v\n", provider.Name, err)
+			continue
+		}
+
+		// Construct Provider Config
+		providerConfig := map[string]interface{}{
+			"name": provider.Provider,
+		}
+		// Merge credentials into provider config
+		for k, v := range creds {
+			providerConfig[k] = v
+		}
+
+		// Create Policy
+		policy := TLSPolicy{
+			Subjects: site.Hosts, // Apply to all hosts in site (should include *.domain)
+			Issuers: []interface{}{
+				map[string]interface{}{
+					"module": "acme",
+					"challenges": map[string]interface{}{
+						"dns": map[string]interface{}{
+							"provider": providerConfig,
+						},
+					},
+				},
+				map[string]interface{}{
+					"module": "zerossl",
+					"challenges": map[string]interface{}{
+						"dns": map[string]interface{}{
+							"provider": providerConfig,
+						},
+					},
+				},
+			},
+		}
+		policies = append(policies, policy)
+	}
+
+	if len(policies) > 0 {
+		tlsApp.Automation = &TLSAutomation{
+			Policies: policies,
+		}
+	}
+	
+	if len(tlsApp.Certificates) > 0 || tlsApp.Automation != nil {
 		config.Apps["tls"] = tlsApp
 	}
 
@@ -395,4 +480,70 @@ func (cb *ConfigBuilder) ApplyConfig(config *CaddyConfig) error {
 		return fmt.Errorf("failed to apply config: %s", string(resp.Body))
 	}
 	return nil
+}
+
+// BuildFromDB builds the configuration from the database
+func (cb *ConfigBuilder) BuildFromDB() (*CaddyConfig, error) {
+	db := database.GetDB()
+
+	// 1. Get Sites
+	var sites []models.Site
+	if err := db.Where("enabled = ?", true).Find(&sites).Error; err != nil {
+		return nil, fmt.Errorf("failed to load sites: %w", err)
+	}
+
+	// 2. Get Routes
+	routesMap := make(map[string][]models.Route)
+	for _, site := range sites {
+		var routes []models.Route
+		db.Where("site_id = ? AND enabled = ?", site.ID, true).Order("`order` ASC").Find(&routes)
+		routesMap[site.ID] = routes
+	}
+
+	// 3. Get Redirect Rules
+	redirectsMap := make(map[string][]models.RedirectRule)
+	for _, site := range sites {
+		var rules []models.RedirectRule
+		db.Where("site_id = ? AND enabled = ?", site.ID, true).Order("priority DESC, created_at DESC").Find(&rules)
+		redirectsMap[site.ID] = rules
+	}
+
+	// 4. Get Upstream Groups
+	var upstreamGroups []models.UpstreamGroup
+	db.Find(&upstreamGroups)
+	groupsMap := make(map[string]*models.UpstreamGroup)
+	upstreamsMap := make(map[string][]models.Upstream)
+	for i := range upstreamGroups {
+		groupsMap[upstreamGroups[i].Name] = &upstreamGroups[i]
+		var upstreams []models.Upstream
+		db.Model(&upstreamGroups[i]).Association("Upstreams").Find(&upstreams)
+		upstreamsMap[upstreamGroups[i].Name] = upstreams
+	}
+
+	// 5. Get Global Settings
+	var settings models.GlobalSettings
+	db.First(&settings)
+
+	// 6. Get Custom Certificates
+	var certificates []models.CustomCertificate
+	db.Find(&certificates)
+
+	// 7. Get TLS Configs
+	var tlsConfigsList []models.TLSConfig
+	db.Find(&tlsConfigsList)
+	tlsConfigsMap := make(map[string]models.TLSConfig)
+	for _, tc := range tlsConfigsList {
+		tlsConfigsMap[tc.SiteID] = tc
+	}
+
+	// 8. Get DNS Providers
+	var dnsProvidersList []models.DNSProvider
+	db.Find(&dnsProvidersList)
+	dnsProvidersMap := make(map[string]models.DNSProvider)
+	for _, dp := range dnsProvidersList {
+		dnsProvidersMap[dp.ID] = dp
+	}
+
+	// Build Config
+	return cb.BuildFullConfig(sites, routesMap, redirectsMap, groupsMap, upstreamsMap, certificates, &settings, tlsConfigsMap, dnsProvidersMap)
 }

@@ -34,6 +34,7 @@ import {
     type MiddlewareSettings,
     updateMiddlewareSettings,
 } from "@/lib/api";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 interface SecurityBasicAuthProps {
     siteId: string;
@@ -45,6 +46,7 @@ export function SecurityBasicAuth({ siteId, middleware, onUpdateMiddleware }: Se
     const [users, setUsers] = useState<BasicAuthUser[]>([]);
     const [loading, setLoading] = useState(true);
     const [dialogOpen, setDialogOpen] = useState(false);
+    const [deleteId, setDeleteId] = useState<string | null>(null);
     const [newUser, setNewUser] = useState({ username: "", password: "" });
     const [showPassword, setShowPassword] = useState(false);
     const [generating, setGenerating] = useState(false);
@@ -222,7 +224,7 @@ export function SecurityBasicAuth({ siteId, middleware, onUpdateMiddleware }: Se
                                                     variant="ghost"
                                                     size="icon"
                                                     className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                                    onClick={() => handleDeleteUser(user.id)}
+                                                    onClick={() => setDeleteId(user.id)}
                                                 >
                                                     <Trash2 className="w-4 h-4" />
                                                 </Button>
@@ -235,6 +237,14 @@ export function SecurityBasicAuth({ siteId, middleware, onUpdateMiddleware }: Se
                     </div>
                 </div>
             )}
+            <ConfirmDialog
+                open={!!deleteId}
+                onOpenChange={(open) => !open && setDeleteId(null)}
+                title="Delete User?"
+                description="Are you sure you want to delete this user? Access will be revoked immediately."
+                onConfirm={() => deleteId && handleDeleteUser(deleteId)}
+                variant="destructive"
+            />
         </div>
     );
 }

@@ -265,42 +265,8 @@ func (h *RouteHandler) DeleteRoute(c *gin.Context) {
 
 // syncToCaddy is similar to the one in sites.go
 func (h *RouteHandler) syncToCaddy() error {
-	var sites []models.Site
-	database.GetDB().Where("enabled = ?", true).Find(&sites)
-
-	routesMap := make(map[string][]models.Route)
-	for _, site := range sites {
-		var routes []models.Route
-		database.GetDB().Where("site_id = ? AND enabled = ?", site.ID, true).Order("`order` ASC").Find(&routes)
-		routesMap[site.ID] = routes
-	}
-
-	redirectsMap := make(map[string][]models.RedirectRule)
-	for _, site := range sites {
-		var rules []models.RedirectRule
-		database.GetDB().Where("site_id = ? AND enabled = ?", site.ID, true).Order("priority DESC, created_at DESC").Find(&rules)
-		redirectsMap[site.ID] = rules
-	}
-
-	var upstreamGroups []models.UpstreamGroup
-	database.GetDB().Find(&upstreamGroups)
-	groupsMap := make(map[string]*models.UpstreamGroup)
-	upstreamsMap := make(map[string][]models.Upstream)
-	for i := range upstreamGroups {
-		groupsMap[upstreamGroups[i].Name] = &upstreamGroups[i]
-		var upstreams []models.Upstream
-		database.GetDB().Model(&upstreamGroups[i]).Association("Upstreams").Find(&upstreams)
-		upstreamsMap[upstreamGroups[i].Name] = upstreams
-	}
-
-	var settings models.GlobalSettings
-	database.GetDB().First(&settings)
-
-	// Get custom certificates
-	var certificates []models.CustomCertificate
-	database.GetDB().Find(&certificates)
-
-	config, err := h.configBuilder.BuildFullConfig(sites, routesMap, redirectsMap, groupsMap, upstreamsMap, certificates, &settings)
+	// Build configuration from database
+	config, err := h.configBuilder.BuildFromDB()
 	if err != nil {
 		return err
 	}
