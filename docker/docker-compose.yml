@@ -1,0 +1,109 @@
+# =============================================================================
+# Production Docker Compose for CaddyAdmin
+# =============================================================================
+
+version: "3.8"
+
+services:
+  # ---------------------------------------------------------------------------
+  # Caddy Server (Managed by CaddyAdmin)
+  # ---------------------------------------------------------------------------
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      - CADDY_ADMIN=0.0.0.0:2019
+    command: caddy run --config /etc/caddy/Caddyfile --adapter caddyfile --watch
+    networks:
+      - caddy-network
+    # Security: Read-only root filesystem
+    read_only: true
+    tmpfs:
+      - /tmp
+    # Security: Drop capabilities
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    # Health check
+    healthcheck:
+      test: ["CMD", "caddy", "version"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ---------------------------------------------------------------------------
+  # CaddyAdmin
+  # ---------------------------------------------------------------------------
+  caddyadmin:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: alpine-production
+    container_name: caddyadmin
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      - CADDY_ADMIN_URL=http://caddy:2019
+      - GIN_MODE=release
+      - ENVIRONMENT=production
+      - TZ=UTC
+    volumes:
+      - manager_data:/app/data
+    depends_on:
+      caddy:
+        condition: service_healthy
+    networks:
+      - caddy-network
+    # Security: Read-only root filesystem (data dir is mounted)
+    read_only: true
+    tmpfs:
+      - /tmp
+    # Security: Drop all capabilities
+    cap_drop:
+      - ALL
+    # Security: No new privileges
+    security_opt:
+      - no-new-privileges:true
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+    # Health check
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+# -----------------------------------------------------------------------------
+# Networks
+# -----------------------------------------------------------------------------
+networks:
+  caddy-network:
+    driver: bridge
+
+# -----------------------------------------------------------------------------
+# Volumes
+# -----------------------------------------------------------------------------
+volumes:
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local
+  manager_data:
+    driver: local

@@ -1,0 +1,65 @@
+# Logs
+*.log
+*.log.*
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+CaddyAdmin.db
+
+# Binaries
+caddy-proxy-manager
+caddyadmin
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Node.js
+node_modules/
+.pnpm-store/
+
+# Next.js
+apps/web/.next/
+apps/web/out/
+
+# Go
+apps/backend/vendor/
+apps/backend/tmp/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Build artifacts
+dist/
+build/
+coverage/
+
+# Test
+*.test
+*.spec
+
+# Docs generated
+apps/backend/docs/
+
+# Static embedded files (generated during build)
+apps/backend/static/
+
+# Temporary files
+tmp/
+temp/
+*.tmp

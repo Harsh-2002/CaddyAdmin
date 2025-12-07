@@ -1,0 +1,9 @@
+# Binaries
+caddyadmin
+main
+*.exe
+*.dll
+
+# Temporary/Cache
+tmp/
+vendor/

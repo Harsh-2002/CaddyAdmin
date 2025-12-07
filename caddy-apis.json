@@ -1,0 +1,2607 @@
+{
+    "openapi": "3.0.3",
+    "info": {
+        "title": "CaddyAdmin API",
+        "description": "Complete REST API documentation for CaddyAdmin - a web-based management interface for Caddy Server",
+        "version": "1.0.0",
+        "contact": {
+            "name": "CaddyAdmin"
+        }
+    },
+    "servers": [
+        {
+            "url": "/api",
+            "description": "API Base Path"
+        }
+    ],
+    "tags": [
+        {
+            "name": "auth",
+            "description": "Authentication endpoints"
+        },
+        {
+            "name": "health",
+            "description": "Health check endpoints"
+        },
+        {
+            "name": "sites",
+            "description": "Site management"
+        },
+        {
+            "name": "routes",
+            "description": "Route management"
+        },
+        {
+            "name": "upstreams",
+            "description": "Upstream server management"
+        },
+        {
+            "name": "upstream-groups",
+            "description": "Load balancing groups"
+        },
+        {
+            "name": "tls",
+            "description": "TLS/SSL configuration"
+        },
+        {
+            "name": "middleware",
+            "description": "Middleware settings"
+        },
+        {
+            "name": "security",
+            "description": "Basic auth, access control, headers"
+        },
+        {
+            "name": "config",
+            "description": "Caddy configuration"
+        },
+        {
+            "name": "settings",
+            "description": "Global settings"
+        },
+        {
+            "name": "history",
+            "description": "Configuration history"
+        },
+        {
+            "name": "metrics",
+            "description": "Metrics and monitoring"
+        },
+        {
+            "name": "logs",
+            "description": "Log management"
+        },
+        {
+            "name": "backup",
+            "description": "Backup and restore"
+        },
+        {
+            "name": "sse",
+            "description": "Server-Sent Events"
+        },
+        {
+            "name": "pki",
+            "description": "PKI/Certificate Authority"
+        }
+    ],
+    "paths": {
+        "/auth/login": {
+            "post": {
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Login",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/LoginRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Login successful",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LoginResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid credentials"
+                    }
+                }
+            }
+        },
+        "/auth/logout": {
+            "post": {
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Logout",
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Logged out"
+                    }
+                }
+            }
+        },
+        "/auth/me": {
+            "get": {
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Get current user",
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Current user info",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CurrentUser"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/health": {
+            "get": {
+                "tags": [
+                    "health"
+                ],
+                "summary": "Health check",
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HealthResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/ready": {
+            "get": {
+                "tags": [
+                    "health"
+                ],
+                "summary": "Readiness probe",
+                "responses": {
+                    "200": {
+                        "description": "Ready"
+                    },
+                    "503": {
+                        "description": "Not ready"
+                    }
+                }
+            }
+        },
+        "/live": {
+            "get": {
+                "tags": [
+                    "health"
+                ],
+                "summary": "Liveness probe",
+                "responses": {
+                    "200": {
+                        "description": "Alive"
+                    }
+                }
+            }
+        },
+        "/sites": {
+            "get": {
+                "tags": [
+                    "sites"
+                ],
+                "summary": "List all sites",
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "sites": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/Site"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "sites"
+                ],
+                "summary": "Create site",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateSiteRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Site"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/sites/{id}": {
+            "get": {
+                "tags": [
+                    "sites"
+                ],
+                "summary": "Get site",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Site"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "sites"
+                ],
+                "summary": "Update site",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateSiteRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Site"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "sites"
+                ],
+                "summary": "Delete site",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deleted"
+                    }
+                }
+            }
+        },
+        "/sites/{id}/routes": {
+            "get": {
+                "tags": [
+                    "routes"
+                ],
+                "summary": "List routes for site",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "routes": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/Route"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "routes"
+                ],
+                "summary": "Create route",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateRouteRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Route"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/routes/{id}": {
+            "get": {
+                "tags": [
+                    "routes"
+                ],
+                "summary": "Get route",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {}
+                }
+            },
+            "put": {
+                "tags": [
+                    "routes"
+                ],
+                "summary": "Update route",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {}
+                }
+            },
+            "delete": {
+                "tags": [
+                    "routes"
+                ],
+                "summary": "Delete route",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {}
+                }
+            }
+        },
+        "/sites/{id}/tls": {
+            "get": {
+                "tags": [
+                    "tls"
+                ],
+                "summary": "Get TLS config",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TLSConfig"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "tls"
+                ],
+                "summary": "Update TLS config",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {}
+                }
+            }
+        },
+        "/sites/{id}/middleware": {
+            "get": {
+                "tags": [
+                    "middleware"
+                ],
+                "summary": "Get middleware settings",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MiddlewareSettings"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "middleware"
+                ],
+                "summary": "Update middleware",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {}
+                }
+            }
+        },
+        "/sites/{id}/auth/users": {
+            "get": {
+                "tags": [
+                    "security"
+                ],
+                "summary": "List basic auth users",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {}
+                }
+            },
+            "post": {
+                "tags": [
+                    "security"
+                ],
+                "summary": "Create basic auth user",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateBasicAuthUserRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {}
+                }
+            }
+        },
+        "/sites/{siteId}/auth/users/{userId}": {
+            "delete": {
+                "tags": [
+                    "security"
+                ],
+                "summary": "Delete basic auth user",
+                "parameters": [
+                    {
+                        "name": "siteId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "userId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {}
+                }
+            }
+        },
+        "/sites/{id}/headers": {
+            "get": {
+                "tags": [
+                    "security"
+                ],
+                "summary": "List header rules",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {}
+                }
+            },
+            "post": {
+                "tags": [
+                    "security"
+                ],
+                "summary": "Create header rule",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {}
+                }
+            }
+        },
+        "/headers/{id}": {
+            "delete": {
+                "tags": [
+                    "security"
+                ],
+                "summary": "Delete header rule",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {}
+                }
+            }
+        },
+        "/sites/{id}/access": {
+            "get": {
+                "tags": [
+                    "security"
+                ],
+                "summary": "List access rules",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {}
+                }
+            },
+            "post": {
+                "tags": [
+                    "security"
+                ],
+                "summary": "Create access rule",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {}
+                }
+            }
+        },
+        "/access/{id}": {
+            "delete": {
+                "tags": [
+                    "security"
+                ],
+                "summary": "Delete access rule",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {}
+                }
+            }
+        },
+        "/sites/{id}/rewrites": {
+            "get": {
+                "tags": [
+                    "middleware"
+                ],
+                "summary": "List rewrite rules",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {}
+                }
+            },
+            "post": {
+                "tags": [
+                    "middleware"
+                ],
+                "summary": "Create rewrite rule",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {}
+                }
+            }
+        },
+        "/rewrites/{id}": {
+            "delete": {
+                "tags": [
+                    "middleware"
+                ],
+                "summary": "Delete rewrite rule",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {}
+                }
+            }
+        },
+        "/sites/{id}/redirects": {
+            "get": {
+                "tags": [
+                    "middleware"
+                ],
+                "summary": "List redirect rules",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {}
+                }
+            },
+            "post": {
+                "tags": [
+                    "middleware"
+                ],
+                "summary": "Create redirect rule",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {}
+                }
+            }
+        },
+        "/redirects/{id}": {
+            "delete": {
+                "tags": [
+                    "middleware"
+                ],
+                "summary": "Delete redirect rule",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {}
+                }
+            }
+        },
+        "/upstreams": {
+            "get": {
+                "tags": [
+                    "upstreams"
+                ],
+                "summary": "List upstreams",
+                "responses": {
+                    "200": {}
+                }
+            },
+            "post": {
+                "tags": [
+                    "upstreams"
+                ],
+                "summary": "Create upstream",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateUpstreamRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {}
+                }
+            }
+        },
+        "/upstreams/{id}": {
+            "get": {
+                "tags": [
+                    "upstreams"
+                ],
+                "summary": "Get upstream",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {}
+                }
+            },
+            "put": {
+                "tags": [
+                    "upstreams"
+                ],
+                "summary": "Update upstream",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {}
+                }
+            },
+            "delete": {
+                "tags": [
+                    "upstreams"
+                ],
+                "summary": "Delete upstream",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {}
+                }
+            }
+        },
+        "/upstreams/status": {
+            "get": {
+                "tags": [
+                    "upstreams"
+                ],
+                "summary": "Get upstream health status",
+                "responses": {
+                    "200": {}
+                }
+            }
+        },
+        "/upstream-groups": {
+            "get": {
+                "tags": [
+                    "upstream-groups"
+                ],
+                "summary": "List groups",
+                "responses": {
+                    "200": {}
+                }
+            },
+            "post": {
+                "tags": [
+                    "upstream-groups"
+                ],
+                "summary": "Create group",
+                "responses": {
+                    "201": {}
+                }
+            }
+        },
+        "/upstream-groups/{id}": {
+            "get": {
+                "tags": [
+                    "upstream-groups"
+                ],
+                "summary": "Get group",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {}
+                }
+            },
+            "put": {
+                "tags": [
+                    "upstream-groups"
+                ],
+                "summary": "Update group",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {}
+                }
+            },
+            "delete": {
+                "tags": [
+                    "upstream-groups"
+                ],
+                "summary": "Delete group",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {}
+                }
+            }
+        },
+        "/config": {
+            "get": {
+                "tags": [
+                    "config"
+                ],
+                "summary": "Get Caddy config",
+                "responses": {
+                    "200": {}
+                }
+            },
+            "post": {
+                "tags": [
+                    "config"
+                ],
+                "summary": "Load Caddy config",
+                "responses": {
+                    "200": {}
+                }
+            }
+        },
+        "/config/sync": {
+            "post": {
+                "tags": [
+                    "config"
+                ],
+                "summary": "Sync config to Caddy",
+                "responses": {
+                    "200": {}
+                }
+            }
+        },
+        "/config/adapt": {
+            "post": {
+                "tags": [
+                    "config"
+                ],
+                "summary": "Adapt Caddyfile to JSON",
+                "responses": {
+                    "200": {}
+                }
+            }
+        },
+        "/config/stop": {
+            "post": {
+                "tags": [
+                    "config"
+                ],
+                "summary": "Stop Caddy server",
+                "responses": {
+                    "200": {}
+                }
+            }
+        },
+        "/config/path/{path}": {
+            "get": {
+                "tags": [
+                    "config"
+                ],
+                "summary": "Get config at path",
+                "parameters": [
+                    {
+                        "name": "path",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {}
+                }
+            },
+            "post": {
+                "tags": [
+                    "config"
+                ],
+                "summary": "Set config at path",
+                "parameters": [
+                    {
+                        "name": "path",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {}
+                }
+            },
+            "delete": {
+                "tags": [
+                    "config"
+                ],
+                "summary": "Delete config at path",
+                "parameters": [
+                    {
+                        "name": "path",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {}
+                }
+            }
+        },
+        "/settings": {
+            "get": {
+                "tags": [
+                    "settings"
+                ],
+                "summary": "Get global settings",
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GlobalSettings"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "settings"
+                ],
+                "summary": "Update global settings",
+                "responses": {
+                    "200": {}
+                }
+            }
+        },
+        "/history": {
+            "get": {
+                "tags": [
+                    "history"
+                ],
+                "summary": "List history",
+                "parameters": [
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "offset",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "resource_type",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {}
+                }
+            }
+        },
+        "/history/{id}": {
+            "get": {
+                "tags": [
+                    "history"
+                ],
+                "summary": "Get history entry",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {}
+                }
+            }
+        },
+        "/history/{id}/rollback": {
+            "post": {
+                "tags": [
+                    "history"
+                ],
+                "summary": "Rollback to history state",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {}
+                }
+            }
+        },
+        "/history/compare": {
+            "get": {
+                "tags": [
+                    "history"
+                ],
+                "summary": "Compare history entries",
+                "parameters": [
+                    {
+                        "name": "id1",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "id2",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {}
+                }
+            }
+        },
+        "/metrics": {
+            "get": {
+                "tags": [
+                    "metrics"
+                ],
+                "summary": "Get app metrics",
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Metrics"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/metrics/prometheus": {
+            "get": {
+                "tags": [
+                    "metrics"
+                ],
+                "summary": "Get Prometheus format metrics",
+                "responses": {
+                    "200": {
+                        "content": {
+                            "text/plain": {}
+                        }
+                    }
+                }
+            }
+        },
+        "/caddy/metrics": {
+            "get": {
+                "tags": [
+                    "metrics"
+                ],
+                "summary": "Get Caddy server metrics",
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CaddyMetrics"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/logs": {
+            "get": {
+                "tags": [
+                    "logs"
+                ],
+                "summary": "Get logs",
+                "parameters": [
+                    {
+                        "name": "lines",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "default": 100
+                        }
+                    },
+                    {
+                        "name": "search",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "level",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {}
+                }
+            }
+        },
+        "/logs/stream": {
+            "get": {
+                "tags": [
+                    "logs"
+                ],
+                "summary": "Stream logs (SSE)",
+                "responses": {
+                    "200": {
+                        "content": {
+                            "text/event-stream": {}
+                        }
+                    }
+                }
+            }
+        },
+        "/logs/access": {
+            "get": {
+                "tags": [
+                    "logs"
+                ],
+                "summary": "Get access logs",
+                "responses": {
+                    "200": {}
+                }
+            }
+        },
+        "/caddyfile/validate": {
+            "post": {
+                "tags": [
+                    "logs"
+                ],
+                "summary": "Validate Caddyfile",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "caddyfile": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {}
+                }
+            }
+        },
+        "/backup": {
+            "get": {
+                "tags": [
+                    "backup"
+                ],
+                "summary": "Create backup (JSON)",
+                "responses": {
+                    "200": {}
+                }
+            }
+        },
+        "/backup/download": {
+            "get": {
+                "tags": [
+                    "backup"
+                ],
+                "summary": "Download backup (ZIP)",
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/zip": {}
+                        }
+                    }
+                }
+            }
+        },
+        "/backup/restore": {
+            "post": {
+                "tags": [
+                    "backup"
+                ],
+                "summary": "Restore from JSON",
+                "responses": {
+                    "200": {}
+                }
+            }
+        },
+        "/backup/upload": {
+            "post": {
+                "tags": [
+                    "backup"
+                ],
+                "summary": "Upload and restore",
+                "requestBody": {
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "backup": {
+                                        "type": "string",
+                                        "format": "binary"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {}
+                }
+            }
+        },
+        "/events/stream": {
+            "get": {
+                "tags": [
+                    "sse"
+                ],
+                "summary": "SSE event stream",
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "subscribe",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "default": "metrics,sites"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "text/event-stream": {}
+                        }
+                    }
+                }
+            }
+        },
+        "/events/status": {
+            "get": {
+                "tags": [
+                    "sse"
+                ],
+                "summary": "SSE hub status",
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {}
+                }
+            }
+        },
+        "/pki/ca/{id}": {
+            "get": {
+                "tags": [
+                    "pki"
+                ],
+                "summary": "Get PKI CA info",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {}
+                }
+            }
+        },
+        "/pki/ca/{id}/certificates": {
+            "get": {
+                "tags": [
+                    "pki"
+                ],
+                "summary": "Get PKI CA certificates",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {}
+                }
+            }
+        },
+        "/certificates": {
+            "get": {
+                "tags": [
+                    "tls"
+                ],
+                "summary": "List custom certificates",
+                "description": "Returns all uploaded custom TLS certificates",
+                "responses": {
+                    "200": {
+                        "description": "List of custom certificates",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "certificates": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/CustomCertificate"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "tls"
+                ],
+                "summary": "Upload custom certificate",
+                "description": "Upload a TLS certificate and private key pair (PEM format)",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "name",
+                                    "cert_file",
+                                    "key_file"
+                                ],
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "description": "Friendly name for the certificate"
+                                    },
+                                    "cert_file": {
+                                        "type": "string",
+                                        "format": "binary",
+                                        "description": "Certificate file (.crt/.pem)"
+                                    },
+                                    "key_file": {
+                                        "type": "string",
+                                        "format": "binary",
+                                        "description": "Private key file (.key/.pem)"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Certificate uploaded",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CustomCertificate"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid certificate or missing fields"
+                    }
+                }
+            }
+        },
+        "/certificates/{id}": {
+            "get": {
+                "tags": [
+                    "tls"
+                ],
+                "summary": "Get custom certificate details",
+                "description": "Get details of a custom certificate including PEM content",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Certificate details",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CustomCertificateDetail"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Certificate not found"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "tls"
+                ],
+                "summary": "Delete custom certificate",
+                "description": "Delete an uploaded custom certificate and its files",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Certificate deleted"
+                    },
+                    "404": {
+                        "description": "Certificate not found"
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "securitySchemes": {
+            "cookieAuth": {
+                "type": "apiKey",
+                "in": "cookie",
+                "name": "caddyadmin_session"
+            }
+        },
+        "schemas": {
+            "LoginRequest": {
+                "type": "object",
+                "required": [
+                    "username",
+                    "password"
+                ],
+                "properties": {
+                    "username": {
+                        "type": "string"
+                    },
+                    "password": {
+                        "type": "string"
+                    }
+                }
+            },
+            "LoginResponse": {
+                "type": "object",
+                "properties": {
+                    "success": {
+                        "type": "boolean"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "expires_in": {
+                        "type": "integer"
+                    },
+                    "user": {
+                        "type": "object",
+                        "properties": {
+                            "username": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "CurrentUser": {
+                "type": "object",
+                "properties": {
+                    "authenticated": {
+                        "type": "boolean"
+                    },
+                    "user": {
+                        "type": "object",
+                        "properties": {
+                            "username": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "HealthResponse": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "type": "string"
+                    },
+                    "version": {
+                        "type": "string"
+                    },
+                    "go_version": {
+                        "type": "string"
+                    },
+                    "num_cpu": {
+                        "type": "integer"
+                    },
+                    "components": {
+                        "type": "object"
+                    }
+                }
+            },
+            "Site": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "hosts": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "listen_port": {
+                        "type": "integer",
+                        "default": 443
+                    },
+                    "auto_https": {
+                        "type": "boolean",
+                        "default": true
+                    },
+                    "tls_enabled": {
+                        "type": "boolean",
+                        "default": true
+                    },
+                    "enabled": {
+                        "type": "boolean",
+                        "default": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "routes": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Route"
+                        }
+                    }
+                }
+            },
+            "CreateSiteRequest": {
+                "type": "object",
+                "required": [
+                    "name",
+                    "hosts"
+                ],
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "hosts": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "listen_port": {
+                        "type": "integer"
+                    },
+                    "auto_https": {
+                        "type": "boolean"
+                    },
+                    "tls_enabled": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "UpdateSiteRequest": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "hosts": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "listen_port": {
+                        "type": "integer"
+                    },
+                    "auto_https": {
+                        "type": "boolean"
+                    },
+                    "tls_enabled": {
+                        "type": "boolean"
+                    },
+                    "enabled": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "Route": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "site_id": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "path_matcher": {
+                        "type": "string"
+                    },
+                    "match_type": {
+                        "type": "string",
+                        "enum": [
+                            "path",
+                            "path_prefix",
+                            "path_regexp"
+                        ]
+                    },
+                    "methods": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "handler_type": {
+                        "type": "string",
+                        "enum": [
+                            "reverse_proxy",
+                            "file_server",
+                            "static_response",
+                            "redirect",
+                            "php_fastcgi"
+                        ]
+                    },
+                    "handler_config": {
+                        "type": "string"
+                    },
+                    "order": {
+                        "type": "integer"
+                    },
+                    "enabled": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "CreateRouteRequest": {
+                "type": "object",
+                "required": [
+                    "path_matcher",
+                    "handler_type"
+                ],
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "path_matcher": {
+                        "type": "string"
+                    },
+                    "match_type": {
+                        "type": "string"
+                    },
+                    "methods": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "handler_type": {
+                        "type": "string"
+                    },
+                    "handler_config": {
+                        "type": "string"
+                    },
+                    "order": {
+                        "type": "integer"
+                    }
+                }
+            },
+            "Upstream": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "address": {
+                        "type": "string"
+                    },
+                    "scheme": {
+                        "type": "string",
+                        "enum": [
+                            "http",
+                            "https",
+                            "h2c"
+                        ]
+                    },
+                    "weight": {
+                        "type": "integer"
+                    },
+                    "max_requests": {
+                        "type": "integer"
+                    },
+                    "max_connections": {
+                        "type": "integer"
+                    },
+                    "health_check_path": {
+                        "type": "string"
+                    },
+                    "health_check_interval": {
+                        "type": "integer"
+                    },
+                    "healthy": {
+                        "type": "boolean"
+                    },
+                    "enabled": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "CreateUpstreamRequest": {
+                "type": "object",
+                "required": [
+                    "name",
+                    "address"
+                ],
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "address": {
+                        "type": "string"
+                    },
+                    "scheme": {
+                        "type": "string"
+                    },
+                    "weight": {
+                        "type": "integer"
+                    },
+                    "max_requests": {
+                        "type": "integer"
+                    },
+                    "max_connections": {
+                        "type": "integer"
+                    },
+                    "health_check_path": {
+                        "type": "string"
+                    },
+                    "health_check_interval": {
+                        "type": "integer"
+                    }
+                }
+            },
+            "UpstreamGroup": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "load_balancing": {
+                        "type": "string",
+                        "enum": [
+                            "round_robin",
+                            "least_conn",
+                            "first",
+                            "random",
+                            "ip_hash",
+                            "uri_hash",
+                            "header",
+                            "cookie"
+                        ]
+                    },
+                    "try_duration": {
+                        "type": "integer"
+                    },
+                    "try_interval": {
+                        "type": "integer"
+                    },
+                    "health_checks": {
+                        "type": "boolean"
+                    },
+                    "passive_health": {
+                        "type": "boolean"
+                    },
+                    "retries": {
+                        "type": "integer"
+                    },
+                    "upstreams": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Upstream"
+                        }
+                    }
+                }
+            },
+            "TLSConfig": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "site_id": {
+                        "type": "string"
+                    },
+                    "auto_https": {
+                        "type": "boolean"
+                    },
+                    "acme_email": {
+                        "type": "string"
+                    },
+                    "acme_provider": {
+                        "type": "string",
+                        "enum": [
+                            "letsencrypt",
+                            "zerossl",
+                            "custom"
+                        ]
+                    },
+                    "on_demand_tls": {
+                        "type": "boolean"
+                    },
+                    "wildcard_cert": {
+                        "type": "boolean"
+                    },
+                    "custom_cert_path": {
+                        "type": "string"
+                    },
+                    "custom_key_path": {
+                        "type": "string"
+                    },
+                    "min_version": {
+                        "type": "string",
+                        "enum": [
+                            "tls1.0",
+                            "tls1.1",
+                            "tls1.2",
+                            "tls1.3"
+                        ]
+                    },
+                    "cipher_suites": {
+                        "type": "string"
+                    }
+                }
+            },
+            "CustomCertificate": {
+                "type": "object",
+                "description": "A user-uploaded TLS certificate for use in site configurations",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Friendly name for the certificate"
+                    },
+                    "domains": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Domain names from the certificate SAN/CN"
+                    },
+                    "cert_pem": {
+                        "type": "string",
+                        "description": "Certificate content (PEM format)"
+                    },
+                    "expires_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Certificate expiration date"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            },
+            "CustomCertificateDetail": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/CustomCertificate"
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "key_pem": {
+                                "type": "string",
+                                "description": "Private key content (PEM format)"
+                            }
+                        }
+                    }
+                ]
+            },
+            "MiddlewareSettings": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "site_id": {
+                        "type": "string"
+                    },
+                    "compression_enabled": {
+                        "type": "boolean"
+                    },
+                    "compression_types": {
+                        "type": "string"
+                    },
+                    "compression_level": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 9
+                    },
+                    "basic_auth_enabled": {
+                        "type": "boolean"
+                    },
+                    "basic_auth_realm": {
+                        "type": "string"
+                    },
+                    "access_control_enabled": {
+                        "type": "boolean"
+                    },
+                    "access_control_default": {
+                        "type": "string",
+                        "enum": [
+                            "allow",
+                            "deny"
+                        ]
+                    }
+                }
+            },
+            "BasicAuthUser": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "site_id": {
+                        "type": "string"
+                    },
+                    "username": {
+                        "type": "string"
+                    },
+                    "password_hash": {
+                        "type": "string"
+                    },
+                    "realm": {
+                        "type": "string"
+                    },
+                    "enabled": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "CreateBasicAuthUserRequest": {
+                "type": "object",
+                "required": [
+                    "username",
+                    "password"
+                ],
+                "properties": {
+                    "username": {
+                        "type": "string"
+                    },
+                    "password": {
+                        "type": "string"
+                    },
+                    "realm": {
+                        "type": "string"
+                    }
+                }
+            },
+            "HeaderRule": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "site_id": {
+                        "type": "string"
+                    },
+                    "direction": {
+                        "type": "string",
+                        "enum": [
+                            "request",
+                            "response"
+                        ]
+                    },
+                    "operation": {
+                        "type": "string",
+                        "enum": [
+                            "set",
+                            "add",
+                            "delete"
+                        ]
+                    },
+                    "header_name": {
+                        "type": "string"
+                    },
+                    "header_value": {
+                        "type": "string"
+                    },
+                    "priority": {
+                        "type": "integer"
+                    },
+                    "enabled": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "AccessRule": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "site_id": {
+                        "type": "string"
+                    },
+                    "rule_type": {
+                        "type": "string",
+                        "enum": [
+                            "allow",
+                            "deny"
+                        ]
+                    },
+                    "cidr": {
+                        "type": "string"
+                    },
+                    "priority": {
+                        "type": "integer"
+                    },
+                    "enabled": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "RewriteRule": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "site_id": {
+                        "type": "string"
+                    },
+                    "match_type": {
+                        "type": "string",
+                        "enum": [
+                            "prefix",
+                            "exact",
+                            "regexp"
+                        ]
+                    },
+                    "pattern": {
+                        "type": "string"
+                    },
+                    "replacement": {
+                        "type": "string"
+                    },
+                    "strip_prefix": {
+                        "type": "string"
+                    },
+                    "priority": {
+                        "type": "integer"
+                    },
+                    "enabled": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "RedirectRule": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "site_id": {
+                        "type": "string"
+                    },
+                    "source": {
+                        "type": "string"
+                    },
+                    "destination": {
+                        "type": "string"
+                    },
+                    "code": {
+                        "type": "integer",
+                        "enum": [
+                            301,
+                            302,
+                            307,
+                            308
+                        ]
+                    },
+                    "priority": {
+                        "type": "integer"
+                    },
+                    "enabled": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "GlobalSettings": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "admin_email": {
+                        "type": "string"
+                    },
+                    "default_sni": {
+                        "type": "string"
+                    },
+                    "grace_period": {
+                        "type": "integer"
+                    },
+                    "http_port": {
+                        "type": "integer"
+                    },
+                    "https_port": {
+                        "type": "integer"
+                    },
+                    "log_level": {
+                        "type": "string"
+                    },
+                    "access_log_enabled": {
+                        "type": "boolean"
+                    },
+                    "default_acme_email": {
+                        "type": "string"
+                    },
+                    "default_acme_provider": {
+                        "type": "string"
+                    },
+                    "default_min_tls": {
+                        "type": "string"
+                    },
+                    "on_demand_tls_enabled": {
+                        "type": "boolean"
+                    },
+                    "hsts_enabled": {
+                        "type": "boolean"
+                    },
+                    "hsts_max_age": {
+                        "type": "integer"
+                    },
+                    "hsts_include_subs": {
+                        "type": "boolean"
+                    },
+                    "hsts_preload": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "ConfigHistory": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "timestamp": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "action": {
+                        "type": "string",
+                        "enum": [
+                            "create",
+                            "update",
+                            "delete",
+                            "load",
+                            "rollback"
+                        ]
+                    },
+                    "resource_type": {
+                        "type": "string"
+                    },
+                    "resource_id": {
+                        "type": "string"
+                    },
+                    "resource_name": {
+                        "type": "string"
+                    },
+                    "previous_state": {
+                        "type": "string"
+                    },
+                    "new_state": {
+                        "type": "string"
+                    },
+                    "success": {
+                        "type": "boolean"
+                    },
+                    "error_message": {
+                        "type": "string"
+                    }
+                }
+            },
+            "Metrics": {
+                "type": "object",
+                "properties": {
+                    "uptime_seconds": {
+                        "type": "integer"
+                    },
+                    "uptime_human": {
+                        "type": "string"
+                    },
+                    "requests_total": {
+                        "type": "integer"
+                    },
+                    "errors_total": {
+                        "type": "integer"
+                    },
+                    "memory": {
+                        "type": "object"
+                    },
+                    "runtime": {
+                        "type": "object"
+                    },
+                    "entities": {
+                        "type": "object"
+                    }
+                }
+            },
+            "CaddyMetrics": {
+                "type": "object",
+                "properties": {
+                    "http": {
+                        "type": "object"
+                    },
+                    "reverse_proxy": {
+                        "type": "object"
+                    },
+                    "admin": {
+                        "type": "object"
+                    },
+                    "config": {
+                        "type": "object"
+                    },
+                    "process": {
+                        "type": "object"
+                    },
+                    "network": {
+                        "type": "object"
+                    },
+                    "memory": {
+                        "type": "object"
+                    },
+                    "gc": {
+                        "type": "object"
+                    },
+                    "runtime": {
+                        "type": "object"
+                    }
+                }
+            }
+        }
+    }
+}
