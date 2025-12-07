@@ -176,6 +176,18 @@ export default function SiteDetailClient() {
         redirect_url: "",
         redirect_permanent: false,
         order: 0,
+        // Encode handler fields
+        encode_gzip: true,
+        encode_zstd: false,
+        // Rewrite handler fields
+        rewrite_uri: "",
+        strip_path_prefix: "",
+        // Headers handler fields
+        header_name: "",
+        header_value: "",
+        header_delete: "",
+        // Authentication handler fields
+        auth_realm: "Restricted",
     });
 
     const [newRoute, setNewRoute] = useState({
@@ -337,6 +349,21 @@ export default function SiteDetailClient() {
                 return JSON.stringify({ body: routeForm.response_body, status_code: routeForm.response_status });
             case "redirect":
                 return JSON.stringify({ to: routeForm.redirect_url, permanent: routeForm.redirect_permanent });
+            case "encode":
+                return JSON.stringify({ gzip: routeForm.encode_gzip, zstd: routeForm.encode_zstd });
+            case "rewrite":
+                return JSON.stringify({ uri: routeForm.rewrite_uri, strip_path_prefix: routeForm.strip_path_prefix });
+            case "headers":
+                const headerConfig: { request?: object; response?: object } = {};
+                if (routeForm.header_name && routeForm.header_value) {
+                    headerConfig.response = { set: { [routeForm.header_name]: routeForm.header_value } };
+                }
+                if (routeForm.header_delete) {
+                    headerConfig.response = { ...headerConfig.response, delete: [routeForm.header_delete] };
+                }
+                return JSON.stringify(headerConfig);
+            case "authentication":
+                return JSON.stringify({ realm: routeForm.auth_realm });
             default:
                 return "{}";
         }
@@ -358,6 +385,9 @@ export default function SiteDetailClient() {
                 name: "", path_matcher: "", handler_type: "reverse_proxy", methods: [],
                 upstream_address: "", upstream_group: "", file_root: "", file_browse: false,
                 response_body: "", response_status: 200, redirect_url: "", redirect_permanent: false, order: 0,
+                encode_gzip: true, encode_zstd: false, rewrite_uri: "", strip_path_prefix: "",
+                header_name: "", header_value: "", header_delete: "",
+                auth_realm: "Restricted",
             });
             loadData();
         } catch (error) {
@@ -886,6 +916,9 @@ export default function SiteDetailClient() {
                                                         <SelectItem value="file_server">File Server</SelectItem>
                                                         <SelectItem value="static_response">Static Response</SelectItem>
                                                         <SelectItem value="redirect">Redirect</SelectItem>
+                                                        <SelectItem value="encode">Compression (Encode)</SelectItem>
+                                                        <SelectItem value="rewrite">URL Rewrite</SelectItem>
+                                                        <SelectItem value="headers">Headers</SelectItem>
                                                     </SelectContent>
                                                 </Select>
                                             </div>
@@ -992,6 +1025,100 @@ export default function SiteDetailClient() {
                                                             onCheckedChange={(checked) => setRouteForm({ ...routeForm, redirect_permanent: checked })}
                                                         />
                                                         <Label>Permanent redirect (301)</Label>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {routeForm.handler_type === "encode" && (
+                                                <div className="space-y-4 p-4 rounded-lg bg-muted/50">
+                                                    <h4 className="font-medium">Compression Settings</h4>
+                                                    <p className="text-sm text-muted-foreground">Enable response compression (gzip, zstd)</p>
+                                                    <div className="flex flex-col gap-2">
+                                                        <div className="flex items-center gap-4">
+                                                            <Switch
+                                                                checked={routeForm.encode_gzip !== false}
+                                                                onCheckedChange={(checked) => setRouteForm({ ...routeForm, encode_gzip: checked })}
+                                                            />
+                                                            <Label>Enable Gzip</Label>
+                                                        </div>
+                                                        <div className="flex items-center gap-4">
+                                                            <Switch
+                                                                checked={routeForm.encode_zstd === true}
+                                                                onCheckedChange={(checked) => setRouteForm({ ...routeForm, encode_zstd: checked })}
+                                                            />
+                                                            <Label>Enable Zstd</Label>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {routeForm.handler_type === "rewrite" && (
+                                                <div className="space-y-4 p-4 rounded-lg bg-muted/50">
+                                                    <h4 className="font-medium">URL Rewrite Settings</h4>
+                                                    <div className="grid gap-2">
+                                                        <Label>Rewrite URI</Label>
+                                                        <Input
+                                                            placeholder="/new-path{uri}"
+                                                            value={routeForm.rewrite_uri}
+                                                            onChange={(e) => setRouteForm({ ...routeForm, rewrite_uri: e.target.value })}
+                                                        />
+                                                    </div>
+                                                    <div className="grid gap-2">
+                                                        <Label>Strip Path Prefix</Label>
+                                                        <Input
+                                                            placeholder="/api"
+                                                            value={routeForm.strip_path_prefix}
+                                                            onChange={(e) => setRouteForm({ ...routeForm, strip_path_prefix: e.target.value })}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {routeForm.handler_type === "headers" && (
+                                                <div className="space-y-4 p-4 rounded-lg bg-muted/50">
+                                                    <h4 className="font-medium">Header Manipulation</h4>
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <div className="grid gap-2">
+                                                            <Label>Header Name</Label>
+                                                            <Input
+                                                                placeholder="X-Custom-Header"
+                                                                value={routeForm.header_name}
+                                                                onChange={(e) => setRouteForm({ ...routeForm, header_name: e.target.value })}
+                                                            />
+                                                        </div>
+                                                        <div className="grid gap-2">
+                                                            <Label>Header Value</Label>
+                                                            <Input
+                                                                placeholder="my-value"
+                                                                value={routeForm.header_value}
+                                                                onChange={(e) => setRouteForm({ ...routeForm, header_value: e.target.value })}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <div className="grid gap-2">
+                                                        <Label>Delete Response Header</Label>
+                                                        <Input
+                                                            placeholder="Server"
+                                                            value={routeForm.header_delete}
+                                                            onChange={(e) => setRouteForm({ ...routeForm, header_delete: e.target.value })}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {routeForm.handler_type === "authentication" && (
+                                                <div className="space-y-4 p-4 rounded-lg bg-muted/50">
+                                                    <h4 className="font-medium">Authentication Settings</h4>
+                                                    <div className="grid gap-2">
+                                                        <Label>Realm</Label>
+                                                        <Input
+                                                            placeholder="Restricted Area"
+                                                            value={routeForm.auth_realm}
+                                                            onChange={(e) => setRouteForm({ ...routeForm, auth_realm: e.target.value })}
+                                                        />
+                                                    </div>
+                                                    <div className="p-3 text-sm text-yellow-600 bg-yellow-50 dark:bg-yellow-900/20 dark:text-yellow-400 rounded-md border border-yellow-200 dark:border-yellow-900">
+                                                        Note: User accounts must be configured via the API or Caddyfile for this handler to work effectivey. This creates a basic auth challenge.
                                                     </div>
                                                 </div>
                                             )}

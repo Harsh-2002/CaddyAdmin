@@ -2314,7 +2314,11 @@
                             "file_server",
                             "static_response",
                             "redirect",
-                            "php_fastcgi"
+                            "php_fastcgi",
+                            "encode",
+                            "rewrite",
+                            "headers",
+                            "authentication"
                         ]
                     },
                     "handler_config": {

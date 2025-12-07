@@ -91,16 +91,56 @@ type Match struct {
 
 // Handler represents a route handler
 type Handler struct {
-	Handler   string      `json:"handler"`
-	Body      string      `json:"body,omitempty"`      // for static_response
-	Root      string      `json:"root,omitempty"`      // for file_server
-	Browse    interface{} `json:"browse,omitempty"`    // for file_server
-	Upstreams []Upstream  `json:"upstreams,omitempty"` // for reverse_proxy
-	Transport interface{} `json:"transport,omitempty"` // for reverse_proxy
+	Handler       string      `json:"handler"`
+	Body          string      `json:"body,omitempty"`           // for static_response
+	Root          string      `json:"root,omitempty"`           // for file_server
+	Browse        interface{} `json:"browse,omitempty"`         // for file_server
+	Upstreams     []Upstream  `json:"upstreams,omitempty"`      // for reverse_proxy
+	Transport     interface{} `json:"transport,omitempty"`      // for reverse_proxy
 	LoadBalancing interface{} `json:"load_balancing,omitempty"` // for reverse_proxy
-	HealthChecks interface{} `json:"health_checks,omitempty"` // for reverse_proxy
-	Headers   *Headers    `json:"headers,omitempty"`   // for headers handler
-	StatusCode int        `json:"status_code,omitempty"` // for static_response
+	HealthChecks  interface{} `json:"health_checks,omitempty"`  // for reverse_proxy
+	Headers       *Headers    `json:"headers,omitempty"`        // for headers handler
+	StatusCode    int         `json:"status_code,omitempty"`    // for static_response
+	// Encode (compression) handler fields
+	Encodings *EncodingsConfig `json:"encodings,omitempty"` // for encode handler
+	Prefer    []string         `json:"prefer,omitempty"`    // for encode handler
+	// Rewrite handler fields
+	URI           string `json:"uri,omitempty"`            // for rewrite handler
+	StripPathPrefix string `json:"strip_path_prefix,omitempty"` // for rewrite handler
+	URISubstring  []RewriteSubstring `json:"uri_substring,omitempty"` // for rewrite handler
+	// Subroute handler fields
+	Routes []Route `json:"routes,omitempty"` // for subroute handler
+	// BasicAuth handler fields
+	Providers *AuthProviders `json:"providers,omitempty"` // for authentication handler
+}
+
+// EncodingsConfig represents encoding configurations for the encode handler
+type EncodingsConfig struct {
+	Gzip *struct{} `json:"gzip,omitempty"`
+	Zstd *struct{} `json:"zstd,omitempty"`
+}
+
+// RewriteSubstring represents a substring replacement for rewrite
+type RewriteSubstring struct {
+	Find    string `json:"find"`
+	Replace string `json:"replace"`
+}
+
+// AuthProviders represents authentication providers
+type AuthProviders struct {
+	HTTP *HTTPBasicAuth `json:"http_basic,omitempty"`
+}
+
+// HTTPBasicAuth represents HTTP basic auth configuration
+type HTTPBasicAuth struct {
+	Accounts []BasicAuthAccount `json:"accounts,omitempty"`
+	Realm    string             `json:"realm,omitempty"`
+}
+
+// BasicAuthAccount represents a single basic auth account
+type BasicAuthAccount struct {
+	Username string `json:"username"`
+	Password string `json:"password"` // bcrypt hash
 }
 
 // Upstream represents a reverse proxy upstream
@@ -306,9 +346,119 @@ func (cb *ConfigBuilder) buildHandler(route models.Route, upstreamGroups map[str
 		} else {
 			handler.StatusCode = 302
 		}
+
+	case "encode":
+		// Compression handler
+		handler.Encodings = &EncodingsConfig{}
+		if gzip, ok := config["gzip"].(bool); ok && gzip {
+			handler.Encodings.Gzip = &struct{}{}
+		}
+		if zstd, ok := config["zstd"].(bool); ok && zstd {
+			handler.Encodings.Zstd = &struct{}{}
+		}
+		// Default to gzip if no specific encoding is set
+		if handler.Encodings.Gzip == nil && handler.Encodings.Zstd == nil {
+			handler.Encodings.Gzip = &struct{}{}
+		}
+		if prefer, ok := config["prefer"].([]interface{}); ok {
+			for _, p := range prefer {
+				if s, ok := p.(string); ok {
+					handler.Prefer = append(handler.Prefer, s)
+				}
+			}
+		}
+
+	case "rewrite":
+		// URL rewrite handler
+		if uri, ok := config["uri"].(string); ok {
+			handler.URI = uri
+		}
+		if stripPrefix, ok := config["strip_path_prefix"].(string); ok {
+			handler.StripPathPrefix = stripPrefix
+		}
+
+	case "headers":
+		// Standalone headers handler
+		handler.Headers = &Headers{}
+		if request, ok := config["request"].(map[string]interface{}); ok {
+			handler.Headers.Request = parseHeaderOps(request)
+		}
+		if response, ok := config["response"].(map[string]interface{}); ok {
+			handler.Headers.Response = parseHeaderOps(response)
+		}
+
+	case "authentication":
+		// Basic auth handler
+		handler.Providers = &AuthProviders{
+			HTTP: &HTTPBasicAuth{
+				Realm: "Restricted",
+			},
+		}
+		if realm, ok := config["realm"].(string); ok {
+			handler.Providers.HTTP.Realm = realm
+		}
+		if accounts, ok := config["accounts"].([]interface{}); ok {
+			for _, acc := range accounts {
+				if accMap, ok := acc.(map[string]interface{}); ok {
+					account := BasicAuthAccount{}
+					if username, ok := accMap["username"].(string); ok {
+						account.Username = username
+					}
+					if password, ok := accMap["password"].(string); ok {
+						account.Password = password
+					}
+					handler.Providers.HTTP.Accounts = append(handler.Providers.HTTP.Accounts, account)
+				}
+			}
+		}
 	}
 
 	return handler, nil
+}
+
+// parseHeaderOps parses header operations from a config map
+func parseHeaderOps(config map[string]interface{}) *HeaderOps {
+	ops := &HeaderOps{}
+	
+	if set, ok := config["set"].(map[string]interface{}); ok {
+		ops.Set = make(map[string][]string)
+		for k, v := range set {
+			if s, ok := v.(string); ok {
+				ops.Set[k] = []string{s}
+			} else if arr, ok := v.([]interface{}); ok {
+				for _, item := range arr {
+					if s, ok := item.(string); ok {
+						ops.Set[k] = append(ops.Set[k], s)
+					}
+				}
+			}
+		}
+	}
+	
+	if add, ok := config["add"].(map[string]interface{}); ok {
+		ops.Add = make(map[string][]string)
+		for k, v := range add {
+			if s, ok := v.(string); ok {
+				ops.Add[k] = []string{s}
+			} else if arr, ok := v.([]interface{}); ok {
+				for _, item := range arr {
+					if s, ok := item.(string); ok {
+						ops.Add[k] = append(ops.Add[k], s)
+					}
+				}
+			}
+		}
+	}
+	
+	if del, ok := config["delete"].([]interface{}); ok {
+		for _, item := range del {
+			if s, ok := item.(string); ok {
+				ops.Delete = append(ops.Delete, s)
+			}
+		}
+	}
+	
+	return ops
 }
 
 // TLSApp represents the TLS app configuration
@@ -336,6 +486,9 @@ type PEMCertKeyPair struct {
 // BuildFullConfig builds the complete Caddy configuration from database models
 func (cb *ConfigBuilder) BuildFullConfig(sites []models.Site, routes map[string][]models.Route, redirectRules map[string][]models.RedirectRule, upstreamGroups map[string]*models.UpstreamGroup, upstreams map[string][]models.Upstream, certificates []models.CustomCertificate, settings *models.GlobalSettings, tlsConfigs map[string]models.TLSConfig, dnsProviders map[string]models.DNSProvider) (*CaddyConfig, error) {
 	config := &CaddyConfig{
+		Admin: &AdminConfig{
+			Listen: "localhost:2019",
+		},
 		Apps: make(map[string]interface{}),
 	}
 
